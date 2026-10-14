@@ -36,6 +36,32 @@ def paste_text(text: str) -> None:
         pyperclip.copy(previous)
 
 
+def selected_text() -> str:
+    """The text selected in the app in front, or "" if nothing is selected.
+
+    Copies the selection with Cmd+C and puts your clipboard back afterwards.
+    """
+    import pyperclip
+
+    try:
+        previous = pyperclip.paste()
+    except pyperclip.PyperclipException:
+        previous = None
+    marker = "\u2063jarvis-no-selection\u2063"
+    pyperclip.copy(marker)
+    press_keys("cmd+c")
+    selection = ""
+    for _ in range(10):  # give the app up to half a second to copy
+        time.sleep(0.05)
+        current = pyperclip.paste()
+        if current != marker:
+            selection = current
+            break
+    if previous is not None:
+        pyperclip.copy(previous)
+    return selection
+
+
 def read_clipboard() -> str:
     import pyperclip
 

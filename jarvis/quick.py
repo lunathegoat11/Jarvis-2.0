@@ -102,6 +102,8 @@ PATTERNS: list[tuple[str, object]] = [
     (r"what time is it|what's the time|what is the time", lambda m: Quick("time")),
     (r"what(?:'s| is) (?:the )?(?:date|day)(?: today)?|what day is it(?: today)?|what's today's date", lambda m: Quick("date")),
     (r"(?:what are|read|list|show) (?:me )?my notes", lambda m: Quick("notes")),
+    (r"add (?:the (?:word|name) )?(?P<w>.+?) to (?:my |the )?(?:dictionary|vocabulary|word list)",
+     lambda m: Quick("add_words", {"words": m["w"]})),
     (r"(?:take a note|make a note|note|remember)(?: that)? (?P<t>.+)", lambda m: Quick("save_note", {"text": m["t"]})),
 ]
 
@@ -120,6 +122,9 @@ def match(text: str) -> Quick | None:
             if quick.action == "open":
                 target = quick.args["target"]
                 if " and " in f" {target} " or len(target.split()) > 3:
+                    return None
+                # "open my email", "open the file from yesterday": not an app name.
+                if target.startswith(("my ", "a ", "an ", "this ", "that ", "the ")) and not _site(target):
                     return None
             return quick
     return None
@@ -171,6 +176,12 @@ def run(quick: Quick) -> str:
         return datetime.now().strftime("It's %A, %B %-d.")
     if quick.action == "notes":
         return run_tool("list_notes", {})
+    if quick.action == "add_words":
+        from . import prefs
+
+        words = re.split(r",| and ", a["words"])
+        prefs.add_words([w.strip().title() if w.strip().islower() else w.strip() for w in words])
+        return "Added to your dictionary."
     if quick.action == "save_note":
         run_tool("save_note", {"text": a["text"]})
         return "Noted."

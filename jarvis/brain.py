@@ -28,6 +28,13 @@ at 4"), keep only the correction. Keep their wording, tone and meaning; do \
 not add content, answer questions in the text, or summarise. Reply with the \
 cleaned text only."""
 
+EDIT_SYSTEM = """\
+You rewrite a piece of text the user has selected, following their spoken \
+instruction (for example "make this more formal", "fix the grammar", \
+"translate this into Spanish", "turn this into bullet points"). Keep anything \
+the instruction doesn't ask you to change. Reply with only the new text, ready \
+to paste in place of the old: no quotes around it and no comments."""
+
 ASK_SYSTEM = """\
 You are Jarvis, a voice assistant on the user's computer. The user is asking \
 about what is on their screen; a screenshot is attached. Your reply is read \
@@ -42,7 +49,9 @@ markdown. You can open apps, websites and browser tabs, search the web in the \
 browser, press keyboard shortcuts, control music and volume, type text, read \
 the clipboard, and save or read notes. When email tools are available you can \
 check and read the user's email and open drafts for them to send; you can't \
-send email yourself. When a task needs looking at the screen and clicking \
+send email yourself. On a Mac you can check the calendar, add events (always \
+read the details back and wait for a yes first) and add reminders. When a \
+task needs looking at the screen and clicking \
 (finding and playing a particular video, working through a website or app), \
 use use_screen with the whole task. Use several tools in a row when a request \
 needs it. If a request is unclear or no tool can do it, say so rather than \
@@ -127,6 +136,21 @@ class Brain:
         self.hud = _QuietHUD()
         # Set (by pressing Esc) to stop screen control between steps.
         self.stop_event = threading.Event()
+        # Bumped by cancel(); work started under an older number stops.
+        self._generation = 0
+        self._turn_start = 0
+
+    def cancel(self) -> None:
+        """Abandons whatever is in progress, e.g. when the user interrupts.
+
+        A request that's waiting on the AI can't be pulled back, so its
+        thread is left to finish on its own; it works on a conversation list
+        that's no longer used, and any screen control stops at its next step.
+        """
+        self._generation += 1
+        self.stop_event.set()
+        # Keep the finished turns; drop the one that was cut off.
+        self._command_history = list(self._command_history[: self._turn_start])
 
     def attach(self, hud) -> None:
         self.hud = hud
@@ -159,15 +183,38 @@ class Brain:
         if now - self._last_command_at > COMMAND_MEMORY_SECONDS:
             self._command_history = []
         self._last_command_at = now
+        self._turn_start = len(self._command_history)
         stamp = datetime.now().strftime("%A %d %B %Y, %H:%M")
         self._command_history.extend(self._user(f"[{stamp}] {command}"))
         return self._command_history
 
-    def clean_dictation(self, transcript: str) -> str:
-        step = self._step(DICTATE_SYSTEM, self._user(transcript), [], self.model, "low")
+    @staticmethod
+    def _context(app: str = "", vocabulary: str = "") -> str:
+        notes = ""
+        if app:
+            notes += (
+                f"\n\nThe text is going into {app}. Format it the way people write "
+                "there (a chat message reads differently from an email or a document), "
+                "without changing what the speaker said."
+            )
+        if vocabulary:
+            notes += f"\n\nSpell these names and terms exactly like this: {vocabulary}."
+        return notes
+
+    def clean_dictation(self, transcript: str, app: str = "", vocabulary: str = "") -> str:
+        system = DICTATE_SYSTEM + self._context(app, vocabulary)
+        step = self._step(system, self._user(transcript), [], self.model, "low")
         if step.refused:
             return transcript
         return step.text or transcript
+
+    def edit_text(self, instruction: str, text: str, app: str = "", vocabulary: str = "") -> str:
+        system = EDIT_SYSTEM + self._context(app, vocabulary)
+        prompt = f"Instruction: {instruction}\n\nSelected text:\n{text}"
+        step = self._step(system, self._user(prompt), [], self.model, "low")
+        if step.refused or not step.text:
+            raise RuntimeError("The AI didn't send back a rewrite.")
+        return step.text
 
     def ask_about_screen(self, question: str, screenshot_b64: str) -> str:
         step = self._step(
@@ -218,6 +265,11 @@ class Brain:
         from . import screen
 
         self.stop_event.clear()
+        mine = self._generation
+
+        def stopped() -> bool:
+            return self.stop_event.is_set() or self._generation != mine
+
         system = SCREEN_SYSTEM.format(grid=GRID_HINT if config.screen_grid else "")
         self.hud.status("Working on it", task)
         shot = screen.capture(config.screen_control_width)
@@ -226,7 +278,7 @@ class Brain:
         )
         try:
             for _ in range(config.max_screen_steps):
-                if self.stop_event.is_set():
+                if stopped():
                     return "Stopped."
                 self._prune(messages)
                 step = self._step(system, messages, screen.SCREEN_TOOLS, self.vision_model, "low")
@@ -246,7 +298,7 @@ class Brain:
                         return call.args.get("summary") or "Done."
                     if call.args is None:
                         results.append((call, "Failed: the arguments were not valid JSON.", True))
-                    elif self.stop_event.is_set():
+                    elif stopped():
                         results.append((call, "Skipped: the user stopped the task.", True))
                     else:
                         try:

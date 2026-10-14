@@ -30,6 +30,30 @@ KOKORO_FILES = {
 _kokoro = None
 _kokoro_lock = threading.Lock()
 
+# Bumped by stop(); speech started under an older number gives up.
+_generation = 0
+_say_process: subprocess.Popen | None = None
+
+
+def stop() -> None:
+    """Cuts off whatever Jarvis is saying, straight away. Any thread."""
+    global _generation
+    _generation += 1
+    try:
+        import sounddevice as sd
+
+        sd.stop()
+    except Exception:
+        pass
+    process = _say_process
+    if process is not None and process.poll() is None:
+        process.terminate()
+    if _pyttsx3_engine is not None:
+        try:
+            _pyttsx3_engine.stop()
+        except Exception:
+            pass
+
 
 def kokoro_installed() -> bool:
     try:
@@ -157,20 +181,25 @@ def _speak_kokoro(text: str) -> None:
     # British voices (bm_, bf_) are spoken with a British accent.
     lang = "en-gb" if voice[:2] in ("bm", "bf") else "en-us"
     speed = float(prefs.get("voice_speed", config.voice_speed))
-    chunks: queue.Queue = queue.Queue(maxsize=2)
+    chunks: queue.Queue = queue.Queue()
+    mine = _generation
 
     def produce():
         try:
             for sentence in split_sentences(text):
+                if _generation != mine:
+                    return
                 chunks.put(kokoro.create(sentence, voice=voice, speed=speed, lang=lang))
         finally:
             chunks.put(None)
 
     threading.Thread(target=produce, daemon=True).start()
     while (chunk := chunks.get()) is not None:
+        if _generation != mine:
+            return
         audio, sample_rate = chunk
         sd.play(audio, sample_rate)
-        sd.wait()
+        sd.wait()  # stop() ends this early
 
 
 _pyttsx3_engine = None
@@ -185,7 +214,12 @@ def _speak_system(text: str) -> None:
             command += ["-v", name]
         if speed != 1.0:
             command += ["-r", str(round(175 * speed))]
-        subprocess.run([*command, text], check=False)
+        global _say_process
+        mine = _generation
+        _say_process = subprocess.Popen([*command, text])
+        if _generation != mine:  # stopped while starting up
+            _say_process.terminate()
+        _say_process.wait()
         return
     global _pyttsx3_engine
     import pyttsx3

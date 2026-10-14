@@ -171,6 +171,44 @@ EMAIL_TOOLS = [
     },
 ]
 
+CALENDAR_TOOLS = [
+    {
+        "name": "check_calendar",
+        "description": "List calendar events from today through the next few days (1 = just today).",
+        "strict": True,
+        "input_schema": _schema({"days": {"type": "integer"}}, ["days"]),
+    },
+    {
+        "name": "add_calendar_event",
+        "description": (
+            "Add an event to the user's calendar. start is local time as 'YYYY-MM-DD HH:MM'. "
+            "First say back the title, day and time and ask the user to confirm; only call "
+            "this with confirmed=true after they've said yes in this conversation."
+        ),
+        "strict": True,
+        "input_schema": _schema(
+            {
+                "title": {"type": "string"},
+                "start": {"type": "string"},
+                "duration_minutes": {"type": "integer"},
+                "confirmed": {"type": "boolean"},
+            },
+            ["title", "start", "duration_minutes", "confirmed"],
+        ),
+    },
+    {
+        "name": "add_reminder",
+        "description": (
+            "Add a reminder to the Reminders app. due is local time as 'YYYY-MM-DD HH:MM', "
+            "or an empty string for no due time."
+        ),
+        "strict": True,
+        "input_schema": _schema(
+            {"title": {"type": "string"}, "due": {"type": "string"}}, ["title", "due"]
+        ),
+    },
+]
+
 # Claude's web search runs on Anthropic's servers, so only Claude gets it.
 WEB_SEARCH_TOOL = {"type": "web_search_20260209", "name": "web_search", "max_uses": 3}
 
@@ -182,6 +220,8 @@ def command_tools(can_see_screen: bool = True) -> list[dict]:
     tools = list(TOOLS)
     if mail.configured():
         tools += EMAIL_TOOLS
+    if config.is_mac:
+        tools += CALENDAR_TOOLS
     if can_see_screen:
         tools += [LOOK_AT_SCREEN_TOOL, USE_SCREEN_TOOL]
     return tools
@@ -268,6 +308,20 @@ def run_tool(name: str, args: dict) -> str:
 
         mail.draft(args["to"], args["subject"], args["body"])
         return "The draft is open in the mail app for the user to check and send."
+    if name == "check_calendar":
+        from . import macapps
+
+        return macapps.upcoming_events(args["days"])
+    if name == "add_calendar_event":
+        if not args["confirmed"]:
+            return "Not added. Ask the user to confirm the title, day and time first."
+        from . import macapps
+
+        return macapps.add_event(args["title"], args["start"], args["duration_minutes"])
+    if name == "add_reminder":
+        from . import macapps
+
+        return macapps.add_reminder(args["title"], args["due"])
     if name == "type_text":
         desktop.paste_text(args["text"])
         return "Typed it."

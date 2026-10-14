@@ -3,6 +3,10 @@ dictation, a question about the screen, or a command.
 
 - Starting with "type" or "write" means dictation: "type see you at six"
   types "See you at six." into the text box you're in.
+- Asking to change text ("make this more formal", "fix the grammar",
+  "translate this into Spanish") means Edit: Jarvis rewrites whatever text
+  you've selected. With nothing selected it becomes a question about the
+  screen instead.
 - Talking about what's on screen ("what's this error", "summarise this
   page") means Ask.
 - Everything else is a command. The command AI can still look at the
@@ -15,11 +19,24 @@ import re
 
 DICTATE = re.compile(
     r"^(?:(?:hey |ok |okay )?jarvis[, ]+)?(?:please )?"
-    r"(?:type|write|dictate|type out|write down|write out)(?: this| that)?[:,]?\s+"
+    r"(?:type out|write down|write out|type|write|dictate)(?: this| that)?[:,]?\s+"
     # "write an email to Sam" is a request, not words to type.
     r"(?!(?:an? |the |me an? )?(?:e-?mail|message|note|reply|text)\b)"
     r"(?P<text>.+)$",
     re.IGNORECASE | re.DOTALL,
+)
+
+EDIT = re.compile(
+    r"^(?:(?:hey |ok |okay )?jarvis[, ]+)?(?:please |can you |could you )?"
+    r"(?:make (?:this|it|that|the selection)\b"
+    r"|rewrite|rephrase|reword|paraphrase|proofread|polish"
+    r"|fix (?:the |this |my )?(?:grammar|spelling|typos|punctuation|wording)"
+    r"|fix (?:this|it|that)\b"
+    r"|translate (?:this|it|that|the selection)\b"
+    r"|(?:shorten|lengthen|expand|simplify|condense) (?:this|it|that|the selection)\b"
+    r"|turn (?:this|it|that) into\b"
+    r"|clean (?:this|it|that) up\b)",
+    re.IGNORECASE,
 )
 
 # Sentences that start like an instruction are commands, even if they
@@ -47,11 +64,13 @@ ASK = re.compile(
 
 
 def route(text: str) -> tuple[str, str]:
-    """Returns (mode, text): mode is "dictate", "ask" or "command"."""
+    """Returns (mode, text): mode is "dictate", "edit", "ask" or "command"."""
     said = text.strip()
     dictate = DICTATE.match(said)
     if dictate:
         return "dictate", dictate["text"].strip()
+    if EDIT.match(said):
+        return "edit", said
     if COMMAND_START.match(said):
         return "command", said
     if ASK.search(said):

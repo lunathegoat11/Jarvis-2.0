@@ -1,6 +1,5 @@
 """Jarvis entry point: listens for hotkeys and runs the three voice modes."""
 
-import queue
 import threading
 import time
 import traceback
@@ -45,12 +44,31 @@ class Jarvis:
                 }
             )
         self.mode: str | None = None
-        # Work runs on one background thread so the hotkey listener never blocks.
-        self.jobs: queue.Queue = queue.Queue()
+        # Each request runs on its own thread and gets a number. Pressing the
+        # key again bumps the number, and older requests go quiet.
+        self._job = 0
+        self._busy = False
+
+    def interrupt(self) -> None:
+        """Stops everything Jarvis is doing so a new request can start."""
+        self._job += 1
+        voice.stop()
+        if self._busy:
+            # Only when something is running, so an idle press doesn't throw
+            # away the last finished turn of the conversation.
+            self.brain.cancel()
+            self.hud.pointer_hide()
+            log("Interrupted.")
+        self._busy = False
+
+    def _current(self, job: int) -> bool:
+        return job == self._job
 
     def start(self, mode: str) -> None:
         if self.recorder.recording:
             return
+        # Talking over Jarvis stops whatever it was saying or doing.
+        self.interrupt()
         log(f"Listening ({mode})...")
         self.mode = mode
         self.recorder.start()
@@ -63,7 +81,9 @@ class Jarvis:
         log("Stopped listening.")
         self.mode = None
         self.hud.thinking("")
-        self.jobs.put((mode, audio))
+        self._busy = True
+        job = self._job
+        threading.Thread(target=self._run_job, args=(mode, audio, job), daemon=True).start()
 
     def cancel(self, mode: str) -> None:
         """Throws the recording away, e.g. when the key was only tapped."""
@@ -76,8 +96,12 @@ class Jarvis:
 
     def _escape(self) -> None:
         # Ignore the Esc that Jarvis itself just pressed while working.
-        if time.monotonic() - desktop.last_keys_at > 0.5:
-            self.brain.stop_event.set()
+        if time.monotonic() - desktop.last_keys_at < 0.5:
+            return
+        self.brain.stop_event.set()
+        if self._busy:
+            self.interrupt()
+            self.hud.flash("Stopped")
 
     def toggle(self, mode: str) -> None:
         if self.recorder.recording:
@@ -85,11 +109,15 @@ class Jarvis:
         else:
             self.start(mode)
 
-    def handle(self, mode: str, audio) -> None:
+    def handle(self, mode: str, audio, job: int = 0) -> None:
+        current = lambda: self._current(job)  # noqa: E731
         started = time.monotonic()
         seconds = len(audio) / config.sample_rate
         log(f"Got {seconds:.1f}s of audio, transcribing...")
-        text = self.transcriber.transcribe(audio)
+        vocabulary = str(prefs.get("vocabulary") or "")
+        text = self.transcriber.transcribe(audio, vocabulary)
+        if not current():
+            return
         if not text:
             log("Heard nothing.")
             self.hud.flash("Didn't catch that")
@@ -103,11 +131,30 @@ class Jarvis:
                 return
         self.hud.thinking(text)
 
+        if mode == "edit":
+            selection = desktop.selected_text()
+            if not current():
+                return
+            if selection.strip():
+                log(f"Rewriting {len(selection)} selected characters...")
+                rewritten = self.brain.edit_text(
+                    text, selection, desktop.frontmost_app(), vocabulary
+                )
+                if not current():
+                    return
+                desktop.paste_text(rewritten)  # replaces the selection
+                self.hud.flash("Rewritten · ⌘Z undoes")
+                return
+            log("Nothing selected, so treating it as a question about the screen.")
+            mode = "ask"
+
         if mode == "dictate":
             # Whisper already punctuates; short bits don't need the AI's
             # tidy-up, which saves a round trip.
             if prefs.get("clean_dictation") and len(text.split()) > SHORT_DICTATION_WORDS:
-                text = self.brain.clean_dictation(text)
+                text = self.brain.clean_dictation(text, desktop.frontmost_app(), vocabulary)
+            if not current():
+                return
             desktop.paste_text(text)
             self.hud.flash("Typed")
             return
@@ -124,31 +171,37 @@ class Jarvis:
             else:
                 log(f"Asking {self.brain.model}...")
                 reply = self.brain.run_command(text)
+        if not current():
+            log("(Dropped the reply to an interrupted request.)")
+            return
         log(f"Reply: {reply!r} ({time.monotonic() - asked_at:.1f}s)")
         shown = voice.clean_for_speech(reply, keep_links=True)
         self.hud.reply(shown, heard=text)
         if prefs.get("speak_replies"):
             self.hud.speaking(True)
             try:
-                desktop.speak(reply)  # returns once it has finished talking
+                desktop.speak(reply)  # returns once finished, or when interrupted
             finally:
-                self.hud.speaking(False)
-            self.hud.hide(after=2.0)
+                if current():
+                    self.hud.speaking(False)
+            if current():
+                self.hud.hide(after=2.0)
         else:
             self.hud.hide(after=reply_seconds(shown))
 
-    def worker(self) -> None:
-        while True:
-            mode, audio = self.jobs.get()
-            try:
-                self.handle(mode, audio)
-            except Exception as error:
+    def _run_job(self, mode: str, audio, job: int) -> None:
+        try:
+            self.handle(mode, audio, job)
+        except Exception as error:
+            if self._current(job):
                 log("Something went wrong:")
                 traceback.print_exc()
                 self.hud.error(str(error))
+        finally:
+            if self._current(job):
+                self._busy = False
 
     def run(self) -> None:
-        threading.Thread(target=self.worker, daemon=True).start()
         voice.warm_up()
         self.transcriber.warm_up()
         print(f"Jarvis is running, using {config.provider} ({self.brain.model}).")

@@ -94,6 +94,9 @@
     border-radius: 50%; background: #fff; transition: transform .2s; }
   .switch input:checked + span { background: var(--amber); }
   .switch input:checked + span::after { transform: translateX(16px); }
+  textarea { width: 100%; margin-top: 8px; resize: vertical; font: inherit; font-size: 13px; color: var(--text);
+    background: rgba(255,255,255,.06); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+  textarea:focus, select:focus { outline: 2px solid rgba(255,181,71,.5); outline-offset: 1px; }
   .info { color: var(--muted); font-size: 12px; padding: 4px 4px 0; }
   .info code { color: var(--text); font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; }
 </style>
@@ -150,6 +153,13 @@
         <div class="row">
           <div><label for="clean">Tidy up dictation</label><small>Off is faster; "um"s stay in</small></div>
           <label class="switch"><input type="checkbox" id="clean"><span></span></label>
+        </div>
+      </div>
+      <div class="group">
+        <div class="row" style="display:block">
+          <label for="vocabulary">Dictionary</label>
+          <small>Names and words Jarvis should hear and spell right, separated by commas. You can also say "add Kai to my dictionary".</small>
+          <textarea id="vocabulary" rows="3" placeholder="e.g. Kai, Brokering, Kosha, PyObjC"></textarea>
         </div>
       </div>
       <div class="info" id="info"></div>
@@ -246,6 +256,7 @@
     speedEl.value = s.voice_speed; showSpeed();
     speakEl.checked = !!s.speak_replies;
     cleanEl.checked = !!s.clean_dictation;
+    $("vocabulary").value = s.vocabulary || "";
     $("info").innerHTML =
       `AI: <code>${evt.info.provider}</code> · <code>${evt.info.model}</code><br>` +
       `Screen: <code>${evt.info.vision_model}</code><br>` +
@@ -257,6 +268,7 @@
   speedEl.addEventListener("change", () => post({ type: "set", key: "voice_speed", value: parseFloat(speedEl.value) }));
   speakEl.addEventListener("change", () => post({ type: "set", key: "speak_replies", value: speakEl.checked }));
   cleanEl.addEventListener("change", () => post({ type: "set", key: "clean_dictation", value: cleanEl.checked }));
+  $("vocabulary").addEventListener("change", () => post({ type: "set", key: "vocabulary", value: $("vocabulary").value.trim() }));
   $("test-voice").addEventListener("click", () => post({ type: "test_voice" }));
   $("open-settings").addEventListener("click", () => $("drawer").classList.add("open"));
   $("close-settings").addEventListener("click", () => $("drawer").classList.remove("open"));

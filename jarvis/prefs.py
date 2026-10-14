@@ -15,6 +15,7 @@ EDITABLE = {
     "voice_speed": lambda: config.voice_speed,
     "speak_replies": lambda: config.speak_replies,
     "clean_dictation": lambda: config.clean_dictation,
+    "vocabulary": lambda: config.vocabulary,
 }
 
 _lock = threading.Lock()
@@ -53,6 +54,20 @@ def set(key: str, value) -> None:
         values[key] = value
         config.data_dir.mkdir(parents=True, exist_ok=True)
         _path().write_text(json.dumps(values, indent=2))
+
+
+def add_words(words: list[str]) -> str:
+    """Adds words to the dictionary, skipping ones already in it."""
+    current = [w.strip() for w in str(get("vocabulary")).split(",") if w.strip()]
+    known = {w.lower() for w in current}
+    for word in words:
+        word = word.strip().strip(".")
+        if word and word.lower() not in known:
+            current.append(word)
+            known.add(word.lower())
+    value = ", ".join(current)
+    set("vocabulary", value)
+    return value
 
 
 def all_values() -> dict:

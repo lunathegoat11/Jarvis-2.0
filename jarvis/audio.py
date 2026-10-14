@@ -57,6 +57,9 @@ class Transcriber:
 
     def __init__(self):
         self._model = None
+        # An interrupted request can still be transcribing when the next one
+        # starts; Whisper runs one at a time.
+        self._lock = threading.Lock()
 
     def _load(self):
         if self._model is None:
@@ -69,13 +72,19 @@ class Transcriber:
         """Loads Whisper in the background so the first request isn't slow."""
         threading.Thread(target=self._load, daemon=True).start()
 
-    def transcribe(self, audio: np.ndarray) -> str:
+    def transcribe(self, audio: np.ndarray, vocabulary: str = "") -> str:
         # Anything shorter than a quarter second is a stray key press.
         if audio.size < config.sample_rate // 4:
             return ""
         # Greedy decoding (beam_size=1) is several times faster than the
         # default beam search and barely less accurate for short commands.
-        segments, _ = self._load().transcribe(
-            audio, beam_size=1, vad_filter=True, condition_on_previous_text=False
-        )
-        return " ".join(s.text.strip() for s in segments).strip()
+        with self._lock:
+            segments, _ = self._load().transcribe(
+                audio,
+                beam_size=1,
+                vad_filter=True,
+                condition_on_previous_text=False,
+                # Names and terms from your dictionary, so Whisper spells them right.
+                initial_prompt=f"Words that may come up: {vocabulary}." if vocabulary else None,
+            )
+            return " ".join(s.text.strip() for s in segments).strip()

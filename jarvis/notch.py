@@ -368,9 +368,11 @@ class NotchHUD:
         self._send({"type": "state", "state": "idle"})
 
     def _flash(self, text):
-        self._set_island("reply", text, NSColor.whiteColor())
-        self._hide_card()
-        self._schedule_hide(1.2)
+        # Notices like "Didn't catch that" are too long for the space beside
+        # the notch, so they go on the card.
+        self._set_island("reply", "Jarvis", NSColor.whiteColor())
+        self._show_card("", text)
+        self._schedule_hide(1.8)
         self._send({"type": "step", "title": "Jarvis", "text": text})
         self._send({"type": "state", "state": "idle"})
 

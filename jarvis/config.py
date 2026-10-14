@@ -110,6 +110,13 @@ class Config:
     email_app_password: str = os.environ.get("EMAIL_APP_PASSWORD", "").replace(" ", "")
     email_imap_host: str = os.environ.get("EMAIL_IMAP_HOST", "")
 
+    # Your dictionary: names and words Jarvis should hear and spell correctly,
+    # separated by commas. Also editable in the app.
+    vocabulary: str = os.environ.get("JARVIS_VOCABULARY", "")
+
+    # Which calendar new events go in; empty means the first one you can edit.
+    calendar_name: str = os.environ.get("JARVIS_CALENDAR", "")
+
     sample_rate: int = 16000
 
     # On a Mac, hold a key to talk and let go to send. Choose from fn,

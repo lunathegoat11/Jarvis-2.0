@@ -6,7 +6,10 @@ Jarvis is a voice assistant that runs on your own computer (Mac, Windows or Linu
 | --- | --- |
 | "type ..." or "write ...", e.g. "type see you at six" | **Dictation.** The words after "type" are tidied up (no "um"s, proper punctuation) and typed into whatever text box you're in. |
 | Something about your screen, e.g. "what does this error mean?" or "summarise this page" | **Ask.** Jarvis takes a screenshot, answers, and reads the answer out loud. |
+| A change to selected text, e.g. "make this more formal", "fix the grammar", "translate this into Spanish" | **Edit.** Jarvis rewrites the text you've selected and puts the new version in its place. ⌘Z brings the old text back. In code editors that copy the whole line when nothing is selected, select the text first. |
 | Anything else, e.g. "open a new tab", "play the latest MrBeast video", "check my email" | **Command.** Jarvis does it: opens apps, websites and tabs, searches, controls music and volume, reads your email, and can take over the mouse for tasks that need clicking. It remembers the conversation for 15 minutes, so follow-ups like "now open the second one" work. |
+
+**Talking over Jarvis:** press right Option while Jarvis is talking, thinking or using your screen and it stops straight away and listens to your next request. A quick tap just stops it. Esc stops it too.
 
 A quick tap of right Option is ignored, and so is a hold where you press another key too, so shortcuts keep working. On Windows and Linux, press `Ctrl+Alt+J`, talk, and press it again.
 
@@ -71,6 +74,18 @@ pip install --ignore-requires-python kokoro-onnx
 The default is `bm_george`, a British man. Other voices: `bm_daniel`, `bm_lewis` and `bm_fable` (British men), `bf_emma`, `bf_alice`, `bf_isabella` and `bf_lily` (British women), and American voices such as `am_michael`, `am_adam`, `af_heart` and `af_bella`. Set one with `JARVIS_VOICE=bm_lewis`, and the pace with `JARVIS_VOICE_SPEED=1.1`.
 
 To use a built-in Mac voice instead, set `JARVIS_VOICE_ENGINE=system` and, optionally, `JARVIS_VOICE=Daniel`. The best built-in voices are the "Premium" and "Enhanced" ones, which you can download in System Settings → Accessibility → Spoken Content → System Voice → Manage Voices.
+
+## Dictionary
+
+If Jarvis keeps mishearing a name or word, add it to your dictionary: say "add Kai and Brokering to my dictionary", or type the words into Dictionary in the app's settings. Whisper is told to listen for them, and dictation and edits spell them exactly as you wrote them.
+
+Dictation also adapts to the app you're in, so a message in a chat app reads like a chat message and the same words in Mail read like an email.
+
+## Calendar and Reminders
+
+On a Mac, Jarvis uses the Calendar and Reminders apps, so any account you've added there (iCloud, Google, Exchange) works with no extra setup. Try "what's on my calendar today?", "add dentist on Friday at 3pm" or "remind me to call Mum at 6". Before adding a calendar event Jarvis reads the details back and waits for you to say yes. The first time, macOS asks whether Terminal may control Calendar and Reminders; allow it. New events go in the first calendar you can edit, or set `JARVIS_CALENDAR` to a calendar's name.
+
+Repeating events may not show up when Jarvis checks your calendar, because of a limit in how Calendar answers these requests.
 
 ## Email
 
@@ -182,6 +197,7 @@ Command mode's abilities live in `jarvis/tools.py`. To add one, put a new entry 
 | `jarvis/tools.py` | What the AI can do in Command mode |
 | `jarvis/screen.py` | Screenshots, the coordinate grid, mouse and keyboard for screen control |
 | `jarvis/mail.py` | Reading email and opening drafts |
+| `jarvis/macapps.py` | Calendar and Reminders (Mac) |
 | `jarvis/voice.py` | Jarvis's speaking voice, and stripping symbols from what it says |
 | `jarvis/app.py`, `jarvis/app.html` | The Jarvis app window, orb and settings |
 | `jarvis/prefs.py` | Settings changed in the app |
