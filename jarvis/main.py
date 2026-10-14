@@ -3,6 +3,7 @@
 import queue
 import threading
 import time
+import traceback
 
 from . import desktop, quick
 from .audio import Recorder, Transcriber
@@ -17,6 +18,10 @@ except ImportError:  # not a Mac, or PyObjC isn't installed
 
     class NotchHUD:  # stand-in so the isinstance check below still works
         pass
+
+
+def log(message: str) -> None:
+    print(f"[{time.strftime('%H:%M:%S')}] {message}", flush=True)
 
 
 class Jarvis:
@@ -34,6 +39,7 @@ class Jarvis:
     def start(self, mode: str) -> None:
         if self.recorder.recording:
             return
+        log(f"Listening ({mode})...")
         self.mode = mode
         self.recorder.start()
         self.hud.listening(mode)
@@ -42,6 +48,7 @@ class Jarvis:
         if not self.recorder.recording or mode != self.mode:
             return
         audio = self.recorder.stop()
+        log("Stopped listening.")
         self.mode = None
         self.hud.thinking("")
         self.jobs.put((mode, audio))
@@ -51,6 +58,7 @@ class Jarvis:
         if not self.recorder.recording or mode != self.mode:
             return
         self.recorder.stop()
+        log("Too short, or another key was pressed; ignored.")
         self.mode = None
         self.hud.hide()
 
@@ -66,10 +74,15 @@ class Jarvis:
             self.start(mode)
 
     def handle(self, mode: str, audio) -> None:
+        started = time.monotonic()
+        seconds = len(audio) / config.sample_rate
+        log(f"Got {seconds:.1f}s of audio, transcribing...")
         text = self.transcriber.transcribe(audio)
         if not text:
+            log("Heard nothing.")
             self.hud.flash("Didn't catch that")
             return
+        log(f"Heard: {text!r} ({time.monotonic() - started:.1f}s)")
         self.hud.thinking(text)
 
         if mode == "dictate":
@@ -79,14 +92,19 @@ class Jarvis:
             self.hud.flash("Typed")
             return
 
+        asked_at = time.monotonic()
         if mode == "ask":
+            log(f"Asking {self.brain.vision_model} about the screen...")
             reply = self.brain.ask_about_screen(text, desktop.screenshot_png_base64(config.screenshot_width))
         else:
             quick_command = quick.match(text)
             if quick_command:
+                log(f"Quick command: {quick_command.action}")
                 reply = quick.run(quick_command)
             else:
+                log(f"Asking {self.brain.model}...")
                 reply = self.brain.run_command(text)
+        log(f"Reply: {reply!r} ({time.monotonic() - asked_at:.1f}s)")
         self.hud.reply(reply, heard=text)
         if config.speak_replies:
             desktop.speak(reply)  # returns once it has finished talking
@@ -100,6 +118,8 @@ class Jarvis:
             try:
                 self.handle(mode, audio)
             except Exception as error:
+                log("Something went wrong:")
+                traceback.print_exc()
                 self.hud.error(str(error))
 
     def run(self) -> None:
