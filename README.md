@@ -44,6 +44,20 @@ Jarvis won't buy anything, send messages, post, delete things or type passwords 
 
 How well this works depends on the model. Claude is built for it and is the most reliable. Open models on NVIDIA or Ollama can do it too, with a coordinate grid drawn on their screenshots to help them aim, but they miss more often. Screen control uses the vision model (`JARVIS_VISION_MODEL`), which has to support both images and tool calling.
 
+## Voice
+
+Out of the box Jarvis speaks with your computer's built-in voice. For a much more natural one, install Kokoro, a free open-source AI voice that runs on your computer:
+
+```bash
+pip install --ignore-requires-python kokoro-onnx
+```
+
+(`--ignore-requires-python` is needed on Python 3.14, which Kokoro works with but doesn't list yet.) Restart Jarvis and it switches to Kokoro by itself. The first time, it downloads the voice files (about 350 MB) into `~/.jarvis/kokoro`.
+
+The default is `bm_george`, a British man. Other voices: `bm_daniel`, `bm_lewis` and `bm_fable` (British men), `bf_emma`, `bf_alice`, `bf_isabella` and `bf_lily` (British women), and American voices such as `am_michael`, `am_adam`, `af_heart` and `af_bella`. Set one with `JARVIS_VOICE=bm_lewis`, and the pace with `JARVIS_VOICE_SPEED=1.1`.
+
+To use a built-in Mac voice instead, set `JARVIS_VOICE_ENGINE=system` and, optionally, `JARVIS_VOICE=Daniel`. The best built-in voices are the "Premium" and "Enhanced" ones, which you can download in System Settings → Accessibility → Spoken Content → System Voice → Manage Voices.
+
 ## Email
 
 Jarvis can read your inbox and write emails for you. It never sends anything itself: it opens a filled-in draft in your mail app, and you press Send. Try "check my email", "read the one from Sam", or "reply to Sam saying I'll be there at 6".
@@ -153,6 +167,7 @@ Command mode's abilities live in `jarvis/tools.py`. To add one, put a new entry 
 | `jarvis/tools.py` | What the AI can do in Command mode |
 | `jarvis/screen.py` | Screenshots, the coordinate grid, mouse and keyboard for screen control |
 | `jarvis/mail.py` | Reading email and opening drafts |
+| `jarvis/voice.py` | Jarvis's speaking voice (Kokoro or built-in) |
 | `jarvis/models.py` | Picking a model the provider still offers |
 | `jarvis/quick.py` | Quick commands that skip the AI |
 | `jarvis/desktop.py` | Typing, clipboard, screenshots, speech, opening apps |

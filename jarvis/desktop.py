@@ -60,23 +60,10 @@ def screenshot_png_base64(max_width: int = 1568) -> str:
     return base64.standard_b64encode(buffer.getvalue()).decode("ascii")
 
 
-_tts_engine = None
-
-
 def speak(text: str) -> None:
-    if not config.speak_replies or not text:
-        return
-    if config.is_mac:
-        # macOS's own voice sounds better than pyttsx3 and works off the main thread.
-        subprocess.run(["say", text], check=False)
-        return
-    global _tts_engine
-    import pyttsx3
+    from . import voice
 
-    if _tts_engine is None:
-        _tts_engine = pyttsx3.init()
-    _tts_engine.say(text)
-    _tts_engine.runAndWait()
+    voice.speak(text)
 
 
 def open_url(url: str) -> None:

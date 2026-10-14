@@ -5,7 +5,7 @@ import threading
 import time
 import traceback
 
-from . import desktop, quick
+from . import desktop, quick, voice
 from .audio import Recorder, Transcriber
 from .brain import make_brain
 from .config import config
@@ -124,6 +124,7 @@ class Jarvis:
 
     def run(self) -> None:
         threading.Thread(target=self.worker, daemon=True).start()
+        voice.warm_up()
         print(f"Jarvis is running, using {config.provider} ({self.brain.model}).")
 
         # Hold-to-talk needs the macOS event loop, which the notch panel runs.

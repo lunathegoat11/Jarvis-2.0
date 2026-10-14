@@ -82,6 +82,12 @@ class Config:
 
     whisper_model: str = os.environ.get("JARVIS_WHISPER_MODEL", "base.en")
     speak_replies: bool = os.environ.get("JARVIS_SPEAK", "1") == "1"
+    # Voice: "kokoro" (natural AI voice, runs locally), "system" (built in),
+    # or "auto" (Kokoro when installed). JARVIS_VOICE names the voice, e.g.
+    # bm_george for Kokoro or Daniel for macOS.
+    voice_engine: str = os.environ.get("JARVIS_VOICE_ENGINE", "auto").lower()
+    voice: str = os.environ.get("JARVIS_VOICE", "")
+    voice_speed: float = float(os.environ.get("JARVIS_VOICE_SPEED", "1.0"))
     # Whisper already adds punctuation, so dictation can skip the AI tidy-up
     # (filler words stay in) to save a round trip to the model.
     clean_dictation: bool = os.environ.get("JARVIS_CLEAN_DICTATION", "1") == "1"
