@@ -76,7 +76,7 @@ class Jarvis:
         system = "mac" if config.is_mac else "windows" if config.is_windows else "linux"
         listener = start_listener(hotkeys, system)
 
-        print("Jarvis is running.")
+        print(f"Jarvis is running, using {config.provider} ({config.model}).")
         print(f"  {config.dictate_hotkey}  dictate into any text field")
         print(f"  {config.ask_hotkey}  ask about what's on your screen")
         print(f"  {config.command_hotkey}  give a command")

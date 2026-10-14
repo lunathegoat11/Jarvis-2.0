@@ -78,9 +78,15 @@ ROOT = str(pathlib.Path(__file__).resolve().parents[1])
 
 
 def config_under(env, tmp_path):
-    # Run outside the repo so a real .env there can't change the result.
+    # Point at an empty .env so a real one in the repo can't change the result.
     code = "from jarvis.config import config as c; print(c.provider, c.base_url, c.api_key, c.model, c.vision_model)"
-    clean = {"PATH": "/usr/bin:/bin", "HOME": str(tmp_path), "PYTHONPATH": ROOT, **env}
+    clean = {
+        "PATH": "/usr/bin:/bin",
+        "HOME": str(tmp_path),
+        "PYTHONPATH": ROOT,
+        "JARVIS_ENV_FILE": str(tmp_path / "no.env"),
+        **env,
+    }
     out = subprocess.run(
         [sys.executable, "-c", code], env=clean, cwd=tmp_path, capture_output=True, text=True, check=True
     )

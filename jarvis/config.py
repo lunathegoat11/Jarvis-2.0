@@ -7,7 +7,9 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv()
+# The .env file next to the jarvis folder, wherever Jarvis is started from.
+ENV_FILE = Path(os.environ.get("JARVIS_ENV_FILE", Path(__file__).resolve().parent.parent / ".env"))
+load_dotenv(ENV_FILE)
 
 DATA_DIR = Path(os.environ.get("JARVIS_DATA_DIR", Path.home() / ".jarvis"))
 

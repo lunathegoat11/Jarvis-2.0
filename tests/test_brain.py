@@ -63,3 +63,12 @@ def test_failed_tool_is_reported_as_error(monkeypatch):
 def test_refusal_gets_a_spoken_reply(monkeypatch):
     b, _ = make_brain([NS(stop_reason="refusal", content=[])], monkeypatch)
     assert b.run_command("something") == "Sorry, I can't help with that one."
+
+
+def test_claude_without_a_key_explains_how_to_switch(monkeypatch):
+    import pytest
+
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN", raising=False)
+    with pytest.raises(SystemExit, match="JARVIS_PROVIDER=ollama"):
+        brain.AnthropicBrain()

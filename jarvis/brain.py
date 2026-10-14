@@ -9,6 +9,7 @@ import json
 import time
 from datetime import datetime
 
+from . import config as settings
 from .config import config
 from .tools import ANTHROPIC_TOOLS, OPENAI_TOOLS, run_tool
 
@@ -84,9 +85,16 @@ class AnthropicBrain(Brain):
     FALLBACK_BETA = "server-side-fallback-2026-07-01"
 
     def __init__(self):
+        import os
+
         import anthropic
 
         super().__init__()
+        if not (os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN")):
+            raise SystemExit(
+                f"Jarvis is set to use Claude, but there's no ANTHROPIC_API_KEY in {settings.ENV_FILE}.\n"
+                "To use Ollama instead, put JARVIS_PROVIDER=ollama and JARVIS_MODEL=<model> in that file."
+            )
         self.client = anthropic.Anthropic()
 
     def _create(self, **kwargs):
@@ -180,7 +188,7 @@ class OpenAICompatibleBrain(Brain):
         if not config.api_key:
             raise SystemExit(
                 f"No API key for provider {config.provider!r}. "
-                "Set it in .env (see .env.example)."
+                f"Set it in {settings.ENV_FILE} (see .env.example)."
             )
         if not config.model:
             raise SystemExit("Set JARVIS_MODEL in .env to the model you want to use.")
