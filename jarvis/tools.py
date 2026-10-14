@@ -1,4 +1,4 @@
-"""Tools Claude can call in command mode, and the code that runs them."""
+"""Tools the AI can call in command mode, and the code that runs them."""
 
 import json
 from datetime import datetime
@@ -56,7 +56,25 @@ TOOLS = [
         "strict": True,
         "input_schema": _schema({}, []),
     },
-    {"type": "web_search_20260209", "name": "web_search", "max_uses": 3},
+]
+
+# Claude's web search runs on Anthropic's servers, so only the Anthropic
+# provider gets it.
+ANTHROPIC_TOOLS = TOOLS + [{"type": "web_search_20260209", "name": "web_search", "max_uses": 3}]
+
+# The same tools in the OpenAI chat-completions format used by NVIDIA, Ollama
+# and other compatible providers. "strict" is left out because not every
+# provider accepts it.
+OPENAI_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": tool["name"],
+            "description": tool["description"],
+            "parameters": tool["input_schema"],
+        },
+    }
+    for tool in TOOLS
 ]
 
 

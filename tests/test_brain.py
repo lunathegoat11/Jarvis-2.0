@@ -16,7 +16,7 @@ class FakeMessages:
 
 def make_brain(responses, monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test")
-    b = brain.Brain()
+    b = brain.AnthropicBrain()
     fake = FakeMessages(responses)
     b.client = NS(beta=NS(messages=fake))
     return b, fake

@@ -8,11 +8,22 @@ Jarvis is a voice assistant that runs on your own computer (Mac, Windows or Linu
 | `Ctrl+Alt+A` | Ask | Jarvis takes a screenshot, answers your question about it, and reads the answer out loud. "What does this error mean?" works well. |
 | `Ctrl+Alt+J` | Command | Jarvis acts on what you say: opens apps and websites, types for you, reads your clipboard, saves and reads back notes, and searches the web. It remembers the conversation for 15 minutes, so follow-ups like "now open the second one" work. |
 
-Speech-to-text runs locally with [Whisper](https://github.com/SYSTRAN/faster-whisper), so your voice recordings stay on your computer. The text Jarvis heard, and the screenshot in Ask mode, are sent to Claude.
+Speech-to-text runs locally with [Whisper](https://github.com/SYSTRAN/faster-whisper), so your voice recordings stay on your computer. The text Jarvis heard, and the screenshot in Ask mode, go to whichever AI provider you choose.
 
-## What it costs
+## AI providers
 
-The code is yours and free. Claude is a paid API, billed per request through your own [Anthropic Console](https://console.anthropic.com) account. Dictation and short commands are cheap; Ask mode costs more because it sends an image. You can set a monthly spending limit in the Console.
+Set `JARVIS_PROVIDER` in `.env` to one of these:
+
+| Provider | What you need | Cost | Notes |
+| --- | --- | --- | --- |
+| `anthropic` (default) | `ANTHROPIC_API_KEY` from [console.anthropic.com](https://console.anthropic.com) | Paid per request | Uses Claude. The only provider with web search in Command mode. |
+| `nvidia` | `NVIDIA_API_KEY` from [build.nvidia.com](https://build.nvidia.com) | NVIDIA gives free credits to start; check your account for limits | Uses Llama 3.3 70B for dictation and commands, and Llama 3.2 90B Vision for Ask mode. |
+| `ollama` | [Ollama](https://ollama.com) installed, then `ollama pull llama3.2` and `ollama pull llama3.2-vision` | Free; runs on your computer | Needs a reasonably powerful machine. Nothing leaves your computer. |
+| `custom` | `JARVIS_BASE_URL`, `JARVIS_API_KEY` and `JARVIS_MODEL` | Depends on the service | For any other service with an OpenAI-compatible API, such as OpenRouter, Groq, Together or LM Studio. |
+
+To use a different model from the same provider, set `JARVIS_MODEL`. Ask mode uses `JARVIS_VISION_MODEL`, which must be a model that accepts images; if you don't set it, Ask mode uses `JARVIS_MODEL`.
+
+Command mode depends on the model being good at tool calling. Large models handle it well. Small local models sometimes pick the wrong tool or answer without acting, so if commands misbehave on Ollama, try a bigger model such as `llama3.1:70b` or `qwen2.5:14b`.
 
 ## Setup
 
@@ -27,7 +38,12 @@ pip install -r requirements.txt
 cp .env.example .env             # Windows: copy .env.example .env
 ```
 
-Open `.env` and paste your API key after `ANTHROPIC_API_KEY=`.
+Open `.env`, set `JARVIS_PROVIDER`, and fill in the key for that provider (see the table above). For NVIDIA, for example:
+
+```
+JARVIS_PROVIDER=nvidia
+NVIDIA_API_KEY=nvapi-...
+```
 
 Then start it:
 
@@ -57,7 +73,7 @@ Notes you save in Command mode go in `~/.jarvis/notes.json`.
 
 ## Adding your own commands
 
-Command mode's abilities live in `jarvis/tools.py`. To add one, put a new entry in `TOOLS` (a name, a description Claude reads to decide when to use it, and the inputs it takes) and handle that name in `run_tool`. Claude starts using it as soon as you restart Jarvis.
+Command mode's abilities live in `jarvis/tools.py`. To add one, put a new entry in `TOOLS` (a name, a description the AI reads to decide when to use it, and the inputs it takes) and handle that name in `run_tool`. Jarvis can use it as soon as you restart it.
 
 ## Code layout
 
@@ -65,7 +81,7 @@ Command mode's abilities live in `jarvis/tools.py`. To add one, put a new entry 
 | --- | --- |
 | `jarvis/main.py` | Hotkeys and the dictate / ask / command flow |
 | `jarvis/audio.py` | Microphone recording and Whisper transcription |
-| `jarvis/brain.py` | Requests to Claude |
+| `jarvis/brain.py` | Requests to the AI provider (Anthropic, or any OpenAI-compatible API) |
 | `jarvis/tools.py` | What Command mode can do |
 | `jarvis/desktop.py` | Typing, clipboard, screenshots, speech, opening apps |
 | `jarvis/config.py` | Settings |

@@ -5,7 +5,7 @@ import threading
 
 from . import desktop
 from .audio import Recorder, Transcriber
-from .brain import Brain
+from .brain import make_brain
 from .config import config
 
 
@@ -13,7 +13,7 @@ class Jarvis:
     def __init__(self):
         self.recorder = Recorder()
         self.transcriber = Transcriber()
-        self.brain = Brain()
+        self.brain = make_brain()
         self.mode: str | None = None
         # Work runs on one background thread so the hotkey listener never blocks.
         self.jobs: queue.Queue = queue.Queue()
