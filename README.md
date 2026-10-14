@@ -6,7 +6,7 @@ Jarvis is a voice assistant that runs on your own computer (Mac, Windows or Linu
 | --- | --- | --- |
 | `Ctrl+Alt+D` | Dictate | Your speech is cleaned up (no "um"s, proper punctuation, self-corrections applied) and typed into whatever text box you're in. |
 | `Ctrl+Alt+A` | Ask | Jarvis takes a screenshot, answers your question about it, and reads the answer out loud. "What does this error mean?" works well. |
-| `Ctrl+Alt+J` | Command | Jarvis acts on what you say: opens apps and websites, types for you, reads your clipboard, saves and reads back notes, and searches the web. It remembers the conversation for 15 minutes, so follow-ups like "now open the second one" work. |
+| `Ctrl+Alt+J` | Command | Jarvis acts on what you say: opens apps, websites and browser tabs, searches, presses keyboard shortcuts, controls music and volume, types for you, reads your clipboard, and saves and reads back notes. It remembers the conversation for 15 minutes, so follow-ups like "now open the second one" work. |
 
 On a Mac, `Alt` is the Option key.
 
@@ -17,6 +17,24 @@ On a Mac, Jarvis lives in the notch at the top of the screen. When you press a h
 Liquid Glass needs macOS 26 (Tahoe) or newer. On older macOS the card uses the frosted blur from earlier versions instead. On Macs without a notch, or on an external display, the panel appears as a small pill at the top centre of the screen. Set `JARVIS_NOTCH=0` to turn the panel off and use the terminal and notifications instead.
 
 Speech-to-text runs locally with [Whisper](https://github.com/SYSTRAN/faster-whisper), so your voice recordings stay on your computer. The text Jarvis heard, and the screenshot in Ask mode, go to whichever AI provider you choose.
+
+## Quick commands
+
+These everyday commands run straight away, without waiting for the AI:
+
+| Say | What happens |
+| --- | --- |
+| "new tab", "close tab", "reopen tab", "next tab", "previous tab" | Browser tabs (your browser needs to be in front) |
+| "go back", "go forward", "refresh" | Browser navigation |
+| "open YouTube", "go to bbc.co.uk" | Opens the website |
+| "open Spotify", "launch Notes" | Opens the app |
+| "search for ...", "search YouTube for ...", "play ... on YouTube" | Opens the search in your browser |
+| "pause", "play", "next song", "previous song" | Music and video |
+| "volume up", "volume down", "set volume to 40", "mute", "unmute" | Volume |
+| "what time is it", "what's the date" | Tells you |
+| "remember that ...", "read my notes" | Saves or reads notes |
+
+Anything else, such as "open a new tab and go to Gmail", goes to the AI, which has the same abilities plus typing and reading the clipboard, and can chain several steps together. Quick commands are in `jarvis/quick.py` if you want to add your own.
 
 ## AI providers
 
@@ -78,6 +96,7 @@ Everything is set in `.env`; see `.env.example` for the full list. The common on
 - `JARVIS_WHISPER_MODEL`: `tiny.en` is faster, `small.en` hears you more accurately.
 - `JARVIS_SPEAK=0` turns off reading replies aloud. Replies stay on screen for a few seconds instead.
 - `JARVIS_NOTCH=0` turns off the notch panel on a Mac.
+- `JARVIS_THINKING=1` lets Ollama models think before answering. It's off by default because it makes replies much slower.
 - `JARVIS_CLEAN_DICTATION=0` pastes what Whisper heard without asking the AI to tidy it. Dictation gets much faster on local models, but "um"s and false starts stay in.
 - `JARVIS_SCREENSHOT_WIDTH` sets how big Ask mode's screenshot is. Local models are much quicker with smaller images; the default is 1024 for them and 1568 for Claude.
 
@@ -103,7 +122,8 @@ Command mode's abilities live in `jarvis/tools.py`. To add one, put a new entry 
 | `jarvis/notch_layout.py` | Where the notch panel and card sit on screen |
 | `jarvis/audio.py` | Microphone recording and Whisper transcription |
 | `jarvis/brain.py` | Requests to the AI provider (Anthropic, or any OpenAI-compatible API) |
-| `jarvis/tools.py` | What Command mode can do |
+| `jarvis/tools.py` | What the AI can do in Command mode |
+| `jarvis/quick.py` | Quick commands that skip the AI |
 | `jarvis/desktop.py` | Typing, clipboard, screenshots, speech, opening apps |
 | `jarvis/config.py` | Settings |
 

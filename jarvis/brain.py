@@ -32,8 +32,11 @@ COMMAND_SYSTEM = """\
 You are Jarvis, a voice assistant that controls the user's computer. The user \
 speaks commands; you carry them out with your tools, then say briefly what you \
 did. Your reply is read aloud, so keep it to one or two plain sentences with no \
-markdown. If a request is unclear or no tool can do it, say so rather than \
-guessing."""
+markdown. You can open apps, websites and browser tabs, search the web in the \
+browser, press keyboard shortcuts, control music and volume, type text, read \
+the clipboard, and save or read notes. Use several tools in a row when a \
+request needs it. If a request is unclear or no tool can do it, say so rather \
+than guessing."""
 
 WEB_SEARCH_HINT = " Search the web when a question needs current information."
 
@@ -193,8 +196,22 @@ class OpenAICompatibleBrain(Brain):
         if not config.model:
             raise SystemExit("Set JARVIS_MODEL in .env to the model you want to use.")
         self.client = OpenAI(base_url=config.base_url or None, api_key=config.api_key)
+        # Thinking models (Gemma 4, Qwen 3...) reason silently before every
+        # answer, which makes a voice assistant feel very slow on a laptop.
+        # Ollama turns that off with reasoning_effort "none".
+        self._no_thinking = config.provider == "ollama" and not config.thinking
 
     def _create(self, **kwargs):
+        if self._no_thinking:
+            from openai import BadRequestError
+
+            try:
+                return self.client.chat.completions.create(
+                    max_tokens=4096, reasoning_effort="none", **kwargs
+                )
+            except BadRequestError:
+                # Older Ollama versions reject the setting; carry on without it.
+                self._no_thinking = False
         return self.client.chat.completions.create(max_tokens=4096, **kwargs)
 
     @staticmethod

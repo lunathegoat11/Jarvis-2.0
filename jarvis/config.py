@@ -77,6 +77,8 @@ class Config:
     # Whisper already adds punctuation, so dictation can skip the AI tidy-up
     # (filler words stay in) to save a round trip to the model.
     clean_dictation: bool = os.environ.get("JARVIS_CLEAN_DICTATION", "1") == "1"
+    # Lets Ollama models think before answering: sometimes smarter, much slower.
+    thinking: bool = os.environ.get("JARVIS_THINKING", "0") == "1"
     # Smaller screenshots make Ask mode much faster on local models, which
     # spend most of their time reading the image.
     screenshot_width: int = int(

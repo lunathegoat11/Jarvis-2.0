@@ -3,7 +3,7 @@
 import queue
 import threading
 
-from . import desktop
+from . import desktop, quick
 from .audio import Recorder, Transcriber
 from .brain import make_brain
 from .config import config
@@ -52,7 +52,11 @@ class Jarvis:
         if mode == "ask":
             reply = self.brain.ask_about_screen(text, desktop.screenshot_png_base64(config.screenshot_width))
         else:
-            reply = self.brain.run_command(text)
+            quick_command = quick.match(text)
+            if quick_command:
+                reply = quick.run(quick_command)
+            else:
+                reply = self.brain.run_command(text)
         self.hud.reply(reply, heard=text)
         if config.speak_replies:
             desktop.speak(reply)  # returns once it has finished talking

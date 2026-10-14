@@ -26,9 +26,10 @@ def call(id, name, args):
     return NS(id=id, function=NS(name=name, arguments=args))
 
 
-def make_brain(responses):
+def make_brain(responses, no_thinking=False):
     b = brain.Brain.__new__(brain.OpenAICompatibleBrain)
     brain.Brain.__init__(b)
+    b._no_thinking = no_thinking
     fake = FakeCompletions(responses)
     b.client = NS(chat=NS(completions=fake))
     return b, fake
@@ -119,3 +120,27 @@ def test_model_override_also_sets_vision_model_for_custom(tmp_path):
 def test_ollama_with_own_model_uses_it_for_ask_mode_too(tmp_path):
     *_, model, vision = config_under({"JARVIS_PROVIDER": "ollama", "JARVIS_MODEL": "gemma3:12b"}, tmp_path)
     assert (model, vision) == ("gemma3:12b", "gemma3:12b")
+
+
+def test_thinking_is_turned_off_and_old_servers_fall_back():
+    from openai import BadRequestError
+
+    b, fake = make_brain([reply(content="hi")], no_thinking=True)
+    b.clean_dictation("um hi")
+    assert fake.calls[0]["reasoning_effort"] == "none"
+
+    # Built without its constructor, which wants a real HTTP response.
+    rejected = BadRequestError.__new__(BadRequestError)
+
+    class OldServer(FakeCompletions):
+        def create(self, **kwargs):
+            if "reasoning_effort" in kwargs:
+                raise rejected
+            return super().create(**kwargs)
+
+    b, _ = make_brain([], no_thinking=True)
+    old = OldServer([reply(content="hello")])
+    b.client = NS(chat=NS(completions=old))
+    assert b.clean_dictation("um hello") == "hello"
+    assert b._no_thinking is False
+    assert "reasoning_effort" not in old.calls[0]
