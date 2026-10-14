@@ -57,8 +57,13 @@ class Config:
     provider: str = PROVIDER
     model: str = _setting("JARVIS_MODEL", "model")
     # Ask mode sends a screenshot, so it needs a model that can read images.
-    vision_model: str = _setting("JARVIS_VISION_MODEL", "vision_model") or _setting(
-        "JARVIS_MODEL", "model"
+    # A model you pick yourself is used for Ask mode too, unless you also set
+    # JARVIS_VISION_MODEL.
+    vision_model: str = (
+        os.environ.get("JARVIS_VISION_MODEL")
+        or os.environ.get("JARVIS_MODEL")
+        or _preset.get("vision_model")
+        or _preset.get("model", "")
     )
     # Only used by OpenAI-compatible providers; the Anthropic client finds
     # ANTHROPIC_API_KEY by itself.
@@ -69,7 +74,7 @@ class Config:
     speak_replies: bool = os.environ.get("JARVIS_SPEAK", "1") == "1"
     sample_rate: int = 16000
 
-    # Hotkeys use pynput's GlobalHotKeys syntax. Press once to start
+    # Hotkeys are written like "<ctrl>+<alt>+d". Press once to start
     # listening, press again to stop.
     dictate_hotkey: str = os.environ.get("JARVIS_DICTATE_KEY", "<ctrl>+<alt>+d")
     ask_hotkey: str = os.environ.get("JARVIS_ASK_KEY", "<ctrl>+<alt>+a")

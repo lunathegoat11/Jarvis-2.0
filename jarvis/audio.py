@@ -14,6 +14,8 @@ class Recorder:
         self._chunks: list[np.ndarray] = []
         self._stream = None
         self._lock = threading.Lock()
+        # Loudness of the latest audio chunk, 0 to 1, for the notch waveform.
+        self.level = 0.0
 
     @property
     def recording(self) -> bool:
@@ -34,6 +36,8 @@ class Recorder:
     def _on_audio(self, indata, frames, time, status) -> None:
         with self._lock:
             self._chunks.append(indata.copy())
+        rms = float(np.sqrt(np.mean(np.square(indata))))
+        self.level = min(1.0, rms * 12)
 
     def stop(self) -> np.ndarray:
         if self._stream is None:
@@ -41,6 +45,7 @@ class Recorder:
         self._stream.stop()
         self._stream.close()
         self._stream = None
+        self.level = 0.0
         with self._lock:
             if not self._chunks:
                 return np.zeros(0, dtype=np.float32)

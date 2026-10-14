@@ -65,6 +65,10 @@ _tts_engine = None
 def speak(text: str) -> None:
     if not config.speak_replies or not text:
         return
+    if config.is_mac:
+        # macOS's own voice sounds better than pyttsx3 and works off the main thread.
+        subprocess.run(["say", text], check=False)
+        return
     global _tts_engine
     import pyttsx3
 

@@ -108,3 +108,8 @@ def test_model_override_also_sets_vision_model_for_custom(tmp_path):
         tmp_path,
     )
     assert (base_url, key, model, vision) == ("https://example.com/v1", "k", "some/model", "some/model")
+
+
+def test_ollama_with_own_model_uses_it_for_ask_mode_too(tmp_path):
+    *_, model, vision = config_under({"JARVIS_PROVIDER": "ollama", "JARVIS_MODEL": "gemma3:12b"}, tmp_path)
+    assert (model, vision) == ("gemma3:12b", "gemma3:12b")

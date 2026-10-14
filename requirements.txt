@@ -3,10 +3,11 @@ openai>=1.0
 faster-whisper>=1.0
 sounddevice>=0.4
 numpy>=1.26
-pynput>=1.7
+pynput>=1.8.1
 pyperclip>=1.8
 mss>=9.0
 pillow>=10.0
-pyttsx3>=2.90
+pyttsx3>=2.90; sys_platform != "darwin"
 plyer>=2.1
 python-dotenv>=1.0
+pyobjc-framework-Cocoa>=11.0; sys_platform == "darwin"
