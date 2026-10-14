@@ -6,7 +6,7 @@ upwards from the bottom of the screen.
 """
 
 # Width added on each side of the notch while Jarvis is active.
-EAR = 64
+EAR = 84
 CARD_WIDTH = 380
 CARD_GAP = 8
 CARD_PADDING = 16

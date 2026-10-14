@@ -203,7 +203,7 @@ class NotchHUD:
         self.mode_label = _label(12, NSFontWeightSemibold, NSColor.whiteColor())
         self.mode_label.setMaximumNumberOfLines_(1)
         self.mode_label.setAlignment_(NSTextAlignmentRight)
-        self.mode_label.setFrame_(NSMakeRect(w - EAR + 2, (h - 16) / 2, EAR - 16, 16))
+        self.mode_label.setFrame_(NSMakeRect(w - EAR, (h - 16) / 2, EAR - 14, 16))
         self.mode_label.setAutoresizingMask_(AUTORESIZE_MIN_X_MARGIN)
         body.addSubview_(self.mode_label)
 

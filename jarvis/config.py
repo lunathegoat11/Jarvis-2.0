@@ -86,8 +86,15 @@ class Config:
     )
     sample_rate: int = 16000
 
-    # Hotkeys are written like "<ctrl>+<alt>+d". Press once to start
-    # listening, press again to stop.
+    # On a Mac, hold a key to talk and let go to send. Choose from fn,
+    # right_cmd, right_option, right_ctrl and right_shift.
+    hold_keys: bool = platform.system() == "Darwin" and os.environ.get("JARVIS_HOLD_KEYS", "1") == "1"
+    dictate_hold: str = os.environ.get("JARVIS_DICTATE_HOLD", "fn")
+    ask_hold: str = os.environ.get("JARVIS_ASK_HOLD", "right_cmd")
+    command_hold: str = os.environ.get("JARVIS_COMMAND_HOLD", "right_option")
+
+    # Elsewhere, or with JARVIS_HOLD_KEYS=0, hotkeys are written like
+    # "<ctrl>+<alt>+d". Press once to start listening, press again to stop.
     dictate_hotkey: str = os.environ.get("JARVIS_DICTATE_KEY", "<ctrl>+<alt>+d")
     ask_hotkey: str = os.environ.get("JARVIS_ASK_KEY", "<ctrl>+<alt>+a")
     command_hotkey: str = os.environ.get("JARVIS_COMMAND_KEY", "<ctrl>+<alt>+j")

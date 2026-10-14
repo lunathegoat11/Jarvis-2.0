@@ -10,6 +10,13 @@ from .config import config
 from .hotkeys import start_listener
 from .hud import make_hud, reply_seconds
 
+try:
+    from .notch import NotchHUD
+except ImportError:  # not a Mac, or PyObjC isn't installed
+
+    class NotchHUD:  # stand-in so the isinstance check below still works
+        pass
+
 
 class Jarvis:
     def __init__(self):
@@ -22,18 +29,34 @@ class Jarvis:
         # Work runs on one background thread so the hotkey listener never blocks.
         self.jobs: queue.Queue = queue.Queue()
 
+    def start(self, mode: str) -> None:
+        if self.recorder.recording:
+            return
+        self.mode = mode
+        self.recorder.start()
+        self.hud.listening(mode)
+
+    def stop(self, mode: str) -> None:
+        if not self.recorder.recording or mode != self.mode:
+            return
+        audio = self.recorder.stop()
+        self.mode = None
+        self.hud.thinking("")
+        self.jobs.put((mode, audio))
+
+    def cancel(self, mode: str) -> None:
+        """Throws the recording away, e.g. when the key was only tapped."""
+        if not self.recorder.recording or mode != self.mode:
+            return
+        self.recorder.stop()
+        self.mode = None
+        self.hud.hide()
+
     def toggle(self, mode: str) -> None:
         if self.recorder.recording:
-            if mode != self.mode:
-                return  # a different hotkey while listening; ignore it
-            audio = self.recorder.stop()
-            self.mode = None
-            self.hud.thinking("")
-            self.jobs.put((mode, audio))
+            self.stop(mode)  # a different hotkey while listening is ignored
         else:
-            self.mode = mode
-            self.recorder.start()
-            self.hud.listening(mode)
+            self.start(mode)
 
     def handle(self, mode: str, audio) -> None:
         text = self.transcriber.transcribe(audio)
@@ -74,6 +97,31 @@ class Jarvis:
 
     def run(self) -> None:
         threading.Thread(target=self.worker, daemon=True).start()
+        print(f"Jarvis is running, using {config.provider} ({config.model}).")
+
+        # Hold-to-talk needs the macOS event loop, which the notch panel runs.
+        if config.hold_keys and isinstance(self.hud, NotchHUD):
+            from . import holdkeys
+
+            tracker = holdkeys.HoldTracker(
+                {
+                    config.dictate_hold: "dictate",
+                    config.ask_hold: "ask",
+                    config.command_hold: "command",
+                },
+                start=self.start,
+                stop=self.stop,
+                cancel=self.cancel,
+            )
+            self._monitors = holdkeys.install(tracker)
+            print(f"  hold {config.dictate_hold}  dictate into any text field")
+            print(f"  hold {config.ask_hold}  ask about what's on your screen")
+            print(f"  hold {config.command_hold}  give a command")
+            print("Talk while holding the key; let go to send.")
+            print("Press Ctrl+C here to quit.")
+            self.hud.run(lambda: None)
+            return
+
         hotkeys = {
             config.dictate_hotkey: lambda: self.toggle("dictate"),
             config.ask_hotkey: lambda: self.toggle("ask"),
@@ -81,11 +129,10 @@ class Jarvis:
         }
         system = "mac" if config.is_mac else "windows" if config.is_windows else "linux"
         listener = start_listener(hotkeys, system)
-
-        print(f"Jarvis is running, using {config.provider} ({config.model}).")
         print(f"  {config.dictate_hotkey}  dictate into any text field")
         print(f"  {config.ask_hotkey}  ask about what's on your screen")
         print(f"  {config.command_hotkey}  give a command")
+        print("Press once to start talking and again to send.")
         print("Press Ctrl+C here to quit.")
         self.hud.run(listener.join)
 

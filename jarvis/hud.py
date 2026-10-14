@@ -28,7 +28,7 @@ class ConsoleHUD:
         pass
 
     def listening(self, mode: str) -> None:
-        print(f"Listening ({MODE_LABELS[mode]})... press the same keys again to stop.")
+        print(f"Listening ({MODE_LABELS[mode]})...")
 
     def thinking(self, heard: str) -> None:
         print(f"You said: {heard}" if heard else "Thinking...")
