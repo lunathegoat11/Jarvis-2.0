@@ -43,7 +43,7 @@ Set `JARVIS_PROVIDER` in `.env` to one of these:
 | Provider | What you need | Cost | Notes |
 | --- | --- | --- | --- |
 | `anthropic` (default) | `ANTHROPIC_API_KEY` from [console.anthropic.com](https://console.anthropic.com) | Paid per request | Uses Claude. The only provider with web search in Command mode. |
-| `nvidia` | `NVIDIA_API_KEY` from [build.nvidia.com](https://build.nvidia.com) | NVIDIA gives free credits to start; check your account for limits | Uses Llama 3.3 70B for dictation and commands, and Llama 3.2 90B Vision for Ask mode. |
+| `nvidia` | `NVIDIA_API_KEY` from [build.nvidia.com](https://build.nvidia.com) | NVIDIA gives free credits to start; check your account for limits | Uses Llama 4 Maverick for everything. NVIDIA retires models over time, so if a default is gone Jarvis picks a current model at startup and says which. `python -m jarvis models` lists what's on offer. |
 | `ollama` | [Ollama](https://ollama.com) installed and a model downloaded | Free; runs on your computer | Nothing leaves your computer. Set `JARVIS_MODEL` to the model's name exactly as `ollama list` shows it. |
 | `custom` | `JARVIS_BASE_URL`, `JARVIS_API_KEY` and `JARVIS_MODEL` | Depends on the service | For any other service with an OpenAI-compatible API, such as OpenRouter, Groq, Together or LM Studio. |
 

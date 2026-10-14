@@ -99,6 +99,8 @@ class AnthropicBrain(Brain):
                 "To use Ollama instead, put JARVIS_PROVIDER=ollama and JARVIS_MODEL=<model> in that file."
             )
         self.client = anthropic.Anthropic()
+        self.model = config.model
+        self.vision_model = config.vision_model
 
     def _create(self, **kwargs):
         return self.client.beta.messages.create(
@@ -116,7 +118,7 @@ class AnthropicBrain(Brain):
 
     def clean_dictation(self, transcript: str) -> str:
         response = self._create(
-            model=config.model,
+            model=self.model,
             system=DICTATE_SYSTEM,
             output_config={"effort": "low"},
             messages=[{"role": "user", "content": transcript}],
@@ -125,7 +127,7 @@ class AnthropicBrain(Brain):
 
     def ask_about_screen(self, question: str, screenshot_b64: str) -> str:
         response = self._create(
-            model=config.vision_model,
+            model=self.vision_model,
             system=ASK_SYSTEM,
             output_config={"effort": "medium"},
             messages=[
@@ -152,7 +154,7 @@ class AnthropicBrain(Brain):
 
         for _ in range(MAX_TOOL_ROUNDS):
             response = self._create(
-                model=config.model,
+                model=self.model,
                 system=COMMAND_SYSTEM + WEB_SEARCH_HINT,
                 output_config={"effort": "medium"},
                 tools=ANTHROPIC_TOOLS,
@@ -200,6 +202,39 @@ class OpenAICompatibleBrain(Brain):
         # answer, which makes a voice assistant feel very slow on a laptop.
         # Ollama turns that off with reasoning_effort "none".
         self._no_thinking = config.provider == "ollama" and not config.thinking
+        self.model = config.model
+        self.vision_model = config.vision_model
+        self._check_models()
+
+    def _check_models(self):
+        """Swaps retired default models for ones the provider offers today."""
+        from .models import PREFERENCES, list_models, pick
+
+        try:
+            available = list_models(self.client)
+        except Exception:
+            return  # can't tell; try the configured models anyway
+        if not available:
+            return
+        preferences = PREFERENCES.get(config.provider, {})
+
+        if self.model not in available:
+            replacement = None if config.model_chosen else pick(available, preferences.get("text", []))
+            if replacement:
+                print(f"{self.model} isn't offered any more; using {replacement} instead.")
+                self.model = replacement
+            else:
+                print(
+                    f"Warning: {config.provider} doesn't list {self.model}. "
+                    "Run `python -m jarvis models` to see what it offers."
+                )
+        if self.vision_model not in available:
+            replacement = (
+                None if config.vision_model_chosen else pick(available, preferences.get("vision", []))
+            )
+            if replacement:
+                print(f"{self.vision_model} isn't offered any more; Ask mode will use {replacement}.")
+                self.vision_model = replacement
 
     def _create(self, **kwargs):
         if self._no_thinking:
@@ -223,7 +258,7 @@ class OpenAICompatibleBrain(Brain):
 
     def clean_dictation(self, transcript: str) -> str:
         response = self._create(
-            model=config.model,
+            model=self.model,
             messages=[
                 {"role": "system", "content": DICTATE_SYSTEM},
                 {"role": "user", "content": transcript},
@@ -233,7 +268,7 @@ class OpenAICompatibleBrain(Brain):
 
     def ask_about_screen(self, question: str, screenshot_b64: str) -> str:
         response = self._create(
-            model=config.vision_model,
+            model=self.vision_model,
             messages=[
                 {"role": "system", "content": ASK_SYSTEM},
                 {
@@ -255,7 +290,7 @@ class OpenAICompatibleBrain(Brain):
 
         for _ in range(MAX_TOOL_ROUNDS):
             response = self._create(
-                model=config.model,
+                model=self.model,
                 messages=[{"role": "system", "content": COMMAND_SYSTEM}, *history],
                 tools=OPENAI_TOOLS,
             )

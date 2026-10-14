@@ -97,7 +97,7 @@ class Jarvis:
 
     def run(self) -> None:
         threading.Thread(target=self.worker, daemon=True).start()
-        print(f"Jarvis is running, using {config.provider} ({config.model}).")
+        print(f"Jarvis is running, using {config.provider} ({self.brain.model}).")
 
         # Hold-to-talk needs the macOS event loop, which the notch panel runs.
         if config.hold_keys and isinstance(self.hud, NotchHUD):

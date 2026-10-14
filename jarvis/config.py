@@ -24,8 +24,10 @@ PROVIDERS = {
     "nvidia": {
         "base_url": "https://integrate.api.nvidia.com/v1",
         "api_key_env": "NVIDIA_API_KEY",
-        "model": "meta/llama-3.3-70b-instruct",
-        "vision_model": "meta/llama-3.2-90b-vision-instruct",
+        # If NVIDIA has retired these, Jarvis picks a current model at startup
+        # (see models.py).
+        "model": "meta/llama-4-maverick-17b-128e-instruct",
+        "vision_model": "meta/llama-4-maverick-17b-128e-instruct",
     },
     "ollama": {
         "base_url": "http://localhost:11434/v1",
@@ -66,6 +68,12 @@ class Config:
         or os.environ.get("JARVIS_MODEL")
         or _preset.get("vision_model")
         or _preset.get("model", "")
+    )
+    # Whether you picked the models yourself. If not, Jarvis may swap the
+    # defaults for ones the provider still offers.
+    model_chosen: bool = bool(os.environ.get("JARVIS_MODEL"))
+    vision_model_chosen: bool = bool(
+        os.environ.get("JARVIS_VISION_MODEL") or os.environ.get("JARVIS_MODEL")
     )
     # Only used by OpenAI-compatible providers; the Anthropic client finds
     # ANTHROPIC_API_KEY by itself.

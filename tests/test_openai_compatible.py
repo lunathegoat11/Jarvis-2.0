@@ -30,6 +30,7 @@ def make_brain(responses, no_thinking=False):
     b = brain.Brain.__new__(brain.OpenAICompatibleBrain)
     brain.Brain.__init__(b)
     b._no_thinking = no_thinking
+    b.model, b.vision_model = "text-model", "vision-model"
     fake = FakeCompletions(responses)
     b.client = NS(chat=NS(completions=fake))
     return b, fake
@@ -99,8 +100,8 @@ def test_nvidia_preset(tmp_path):
         "nvidia",
         "https://integrate.api.nvidia.com/v1",
         "nv-key",
-        "meta/llama-3.3-70b-instruct",
-        "meta/llama-3.2-90b-vision-instruct",
+        "meta/llama-4-maverick-17b-128e-instruct",
+        "meta/llama-4-maverick-17b-128e-instruct",
     ]
 
 
@@ -144,3 +145,47 @@ def test_thinking_is_turned_off_and_old_servers_fall_back():
     assert b.clean_dictation("um hello") == "hello"
     assert b._no_thinking is False
     assert "reasoning_effort" not in old.calls[0]
+
+
+def brain_with_catalog(monkeypatch, available, model="old/model", vision="old/vision", chosen=False):
+    from jarvis import config as settings
+
+    cfg = settings.Config(
+        provider="nvidia", model=model, vision_model=vision,
+        model_chosen=chosen, vision_model_chosen=chosen,
+    )
+    monkeypatch.setattr(brain, "config", cfg)
+    b, _ = make_brain([])
+    b.model, b.vision_model = model, vision
+    b.client = NS(models=NS(list=lambda: [NS(id=name) for name in available]))
+    b._check_models()
+    return b
+
+
+def test_retired_defaults_are_replaced(monkeypatch, capsys):
+    b = brain_with_catalog(
+        monkeypatch,
+        ["openai/gpt-oss-120b", "meta/llama-4-scout-17b-16e-instruct", "nvidia/nemotron-3-super-120b"],
+    )
+    assert b.model == "openai/gpt-oss-120b"
+    assert b.vision_model == "meta/llama-4-scout-17b-16e-instruct"
+    assert "isn't offered any more" in capsys.readouterr().out
+
+
+def test_models_you_chose_are_left_alone(monkeypatch, capsys):
+    b = brain_with_catalog(monkeypatch, ["openai/gpt-oss-120b"], model="my/model", vision="my/model", chosen=True)
+    assert b.model == "my/model"
+    assert "python -m jarvis models" in capsys.readouterr().out
+
+
+def test_available_defaults_are_kept(monkeypatch):
+    b = brain_with_catalog(monkeypatch, ["old/model", "old/vision", "openai/gpt-oss-120b"])
+    assert (b.model, b.vision_model) == ("old/model", "old/vision")
+
+
+def test_pick_follows_preference_order():
+    from jarvis.models import PREFERENCES, pick
+
+    available = ["z-ai/glm-5", "meta/llama-3.3-70b-instruct", "openai/gpt-oss-120b"]
+    assert pick(available, PREFERENCES["nvidia"]["text"]) == "meta/llama-3.3-70b-instruct"
+    assert pick(["something/else"], PREFERENCES["nvidia"]["text"]) is None
