@@ -78,6 +78,12 @@ Everything is set in `.env`; see `.env.example` for the full list. The common on
 - `JARVIS_WHISPER_MODEL`: `tiny.en` is faster, `small.en` hears you more accurately.
 - `JARVIS_SPEAK=0` turns off reading replies aloud. Replies stay on screen for a few seconds instead.
 - `JARVIS_NOTCH=0` turns off the notch panel on a Mac.
+- `JARVIS_CLEAN_DICTATION=0` pastes what Whisper heard without asking the AI to tidy it. Dictation gets much faster on local models, but "um"s and false starts stay in.
+- `JARVIS_SCREENSHOT_WIDTH` sets how big Ask mode's screenshot is. Local models are much quicker with smaller images; the default is 1024 for them and 1568 for Claude.
+
+### Speed on Ollama
+
+Local models run on your Mac's GPU, so it sits near 100% while Jarvis thinks. If replies are slow, try a smaller model. Gemma 4's `e4b` and `e2b` sizes respond noticeably faster than `12b` and can still read images: run `ollama pull gemma4:e4b`, then set `JARVIS_MODEL=gemma4:e4b`. Ollama also unloads a model after five idle minutes, which makes the next request slow while it reloads. To keep it loaded for an hour, run `launchctl setenv OLLAMA_KEEP_ALIVE 1h` and restart the Ollama app.
 - `JARVIS_DICTATE_KEY`, `JARVIS_ASK_KEY`, `JARVIS_COMMAND_KEY` change the hotkeys, written like `<ctrl>+<shift>+j`.
 
 Notes you save in Command mode go in `~/.jarvis/notes.json`.

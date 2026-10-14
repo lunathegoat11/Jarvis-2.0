@@ -74,6 +74,14 @@ class Config:
 
     whisper_model: str = os.environ.get("JARVIS_WHISPER_MODEL", "base.en")
     speak_replies: bool = os.environ.get("JARVIS_SPEAK", "1") == "1"
+    # Whisper already adds punctuation, so dictation can skip the AI tidy-up
+    # (filler words stay in) to save a round trip to the model.
+    clean_dictation: bool = os.environ.get("JARVIS_CLEAN_DICTATION", "1") == "1"
+    # Smaller screenshots make Ask mode much faster on local models, which
+    # spend most of their time reading the image.
+    screenshot_width: int = int(
+        os.environ.get("JARVIS_SCREENSHOT_WIDTH", "1568" if PROVIDER == "anthropic" else "1024")
+    )
     sample_rate: int = 16000
 
     # Hotkeys are written like "<ctrl>+<alt>+d". Press once to start

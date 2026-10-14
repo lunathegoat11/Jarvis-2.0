@@ -43,12 +43,14 @@ class Jarvis:
         self.hud.thinking(text)
 
         if mode == "dictate":
-            desktop.paste_text(self.brain.clean_dictation(text))
+            if config.clean_dictation:
+                text = self.brain.clean_dictation(text)
+            desktop.paste_text(text)
             self.hud.flash("Typed")
             return
 
         if mode == "ask":
-            reply = self.brain.ask_about_screen(text, desktop.screenshot_png_base64())
+            reply = self.brain.ask_about_screen(text, desktop.screenshot_png_base64(config.screenshot_width))
         else:
             reply = self.brain.run_command(text)
         self.hud.reply(reply, heard=text)
