@@ -5,7 +5,7 @@ import threading
 import time
 import traceback
 
-from . import desktop, quick, voice
+from . import desktop, quick, router, voice
 from .audio import Recorder, Transcriber
 from .brain import make_brain
 from .config import config
@@ -83,6 +83,12 @@ class Jarvis:
             self.hud.flash("Didn't catch that")
             return
         log(f"Heard: {text!r} ({time.monotonic() - started:.1f}s)")
+        if mode == "auto":
+            mode, text = router.route(text)
+            log(f"Treating that as: {mode}")
+            if not text:
+                self.hud.flash("Didn't catch that")
+                return
         self.hud.thinking(text)
 
         if mode == "dictate":
@@ -131,36 +137,49 @@ class Jarvis:
         if config.hold_keys and isinstance(self.hud, NotchHUD):
             from . import holdkeys
 
-            tracker = holdkeys.HoldTracker(
-                {
+            if config.one_key:
+                bindings = {config.jarvis_hold: "auto"}
+            else:
+                bindings = {
                     config.dictate_hold: "dictate",
                     config.ask_hold: "ask",
                     config.command_hold: "command",
-                },
-                start=self.start,
-                stop=self.stop,
-                cancel=self.cancel,
+                }
+            tracker = holdkeys.HoldTracker(
+                bindings, start=self.start, stop=self.stop, cancel=self.cancel
             )
             # Esc stops screen control between steps.
             self._monitors = holdkeys.install(tracker, on_escape=self._escape)
-            print(f"  hold {config.dictate_hold}  dictate into any text field")
-            print(f"  hold {config.ask_hold}  ask about what's on your screen")
-            print(f"  hold {config.command_hold}  give a command")
+            if config.one_key:
+                print(f"  hold {config.jarvis_hold} and talk:")
+                print('    "type see you at six"         types it where you are')
+                print('    "what does this error mean"   answers about your screen')
+                print('    anything else                 a command')
+            else:
+                print(f"  hold {config.dictate_hold}  dictate into any text field")
+                print(f"  hold {config.ask_hold}  ask about what's on your screen")
+                print(f"  hold {config.command_hold}  give a command")
             print("Talk while holding the key; let go to send. Esc stops Jarvis using your screen.")
             print("Press Ctrl+C here to quit.")
             self.hud.run(lambda: None)
             return
 
-        hotkeys = {
-            config.dictate_hotkey: lambda: self.toggle("dictate"),
-            config.ask_hotkey: lambda: self.toggle("ask"),
-            config.command_hotkey: lambda: self.toggle("command"),
-        }
+        if config.one_key:
+            hotkeys = {config.command_hotkey: lambda: self.toggle("auto")}
+        else:
+            hotkeys = {
+                config.dictate_hotkey: lambda: self.toggle("dictate"),
+                config.ask_hotkey: lambda: self.toggle("ask"),
+                config.command_hotkey: lambda: self.toggle("command"),
+            }
         system = "mac" if config.is_mac else "windows" if config.is_windows else "linux"
         listener = start_listener(hotkeys, system)
-        print(f"  {config.dictate_hotkey}  dictate into any text field")
-        print(f"  {config.ask_hotkey}  ask about what's on your screen")
-        print(f"  {config.command_hotkey}  give a command")
+        if config.one_key:
+            print(f"  {config.command_hotkey}  talk to Jarvis (say \"type ...\" to dictate)")
+        else:
+            print(f"  {config.dictate_hotkey}  dictate into any text field")
+            print(f"  {config.ask_hotkey}  ask about what's on your screen")
+            print(f"  {config.command_hotkey}  give a command")
         print("Press once to start talking and again to send.")
         print("Press Ctrl+C here to quit.")
         self.hud.run(listener.join)

@@ -180,6 +180,14 @@ class Brain:
     def _run_command_tool(self, call: Call) -> tuple[str, bool]:
         if call.args is None:
             return "Failed: the arguments were not valid JSON.", True
+        if call.name == "look_at_screen":
+            from . import desktop
+
+            try:
+                shot = desktop.screenshot_png_base64(config.screenshot_width)
+                return self.ask_about_screen(call.args["question"], shot), False
+            except Exception as error:
+                return f"Failed: {error}", True
         if call.name == "use_screen":
             try:
                 return self.operate(call.args["task"]), False

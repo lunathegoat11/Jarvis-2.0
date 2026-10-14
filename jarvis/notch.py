@@ -78,6 +78,7 @@ MODE_COLORS = {
     "dictate": _rgb(90, 200, 250),
     "ask": _rgb(191, 90, 242),
     "command": _rgb(255, 159, 10),
+    "auto": _rgb(100, 210, 255),
 }
 ERROR_COLOR = _rgb(255, 69, 58)
 POINTER_COLOR = _rgb(255, 159, 10)

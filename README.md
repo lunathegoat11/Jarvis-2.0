@@ -1,18 +1,20 @@
 # Jarvis 2.0
 
-Jarvis is a voice assistant that runs on your own computer (Mac, Windows or Linux). On a Mac, hold a key, talk, and let go; Jarvis does one of three things depending on which key you held.
+Jarvis is a voice assistant that runs on your own computer (Mac, Windows or Linux). On a Mac, hold **right Option**, talk, and let go. Jarvis works out what you want from what you say:
 
-| Mac (hold) | Windows / Linux (press, talk, press again) | Mode | What happens |
-| --- | --- | --- | --- |
-| fn | `Ctrl+Alt+D` | Dictate | Your speech is cleaned up (no "um"s, proper punctuation, self-corrections applied) and typed into whatever text box you're in. |
-| right Command | `Ctrl+Alt+A` | Ask | Jarvis takes a screenshot, answers your question about it, and reads the answer out loud. "What does this error mean?" works well. |
-| right Option | `Ctrl+Alt+J` | Command | Jarvis acts on what you say: opens apps, websites and browser tabs, searches, presses keyboard shortcuts, controls music and volume, types for you, reads your clipboard, and saves and reads back notes. It remembers the conversation for 15 minutes, so follow-ups like "now open the second one" work. |
+| Say | What happens |
+| --- | --- |
+| "type ..." or "write ...", e.g. "type see you at six" | **Dictation.** The words after "type" are tidied up (no "um"s, proper punctuation) and typed into whatever text box you're in. |
+| Something about your screen, e.g. "what does this error mean?" or "summarise this page" | **Ask.** Jarvis takes a screenshot, answers, and reads the answer out loud. |
+| Anything else, e.g. "open a new tab", "play the latest MrBeast video", "check my email" | **Command.** Jarvis does it: opens apps, websites and tabs, searches, controls music and volume, reads your email, and can take over the mouse for tasks that need clicking. It remembers the conversation for 15 minutes, so follow-ups like "now open the second one" work. |
 
-A quick tap of a hold key is ignored, and so is a hold where you press another key too, so shortcuts like right Command + C keep working. If holding fn opens the emoji picker or changes your keyboard language, go to System Settings → Keyboard and set "Press 🌐 key to" to "Do Nothing".
+A quick tap of right Option is ignored, and so is a hold where you press another key too, so shortcuts keep working. On Windows and Linux, press `Ctrl+Alt+J`, talk, and press it again.
+
+If you'd rather have a separate key for each mode (fn to dictate, right Command to ask, right Option for commands), set `JARVIS_ONE_KEY=0`.
 
 ## The notch
 
-On a Mac, Jarvis lives in the notch at the top of the screen. When you hold a Jarvis key, a black panel grows out of the notch with a live waveform of your voice and the mode you're in (blue for Dictate, purple for Ask, orange for Command). While Jarvis works, the waveform pulses, and a Liquid Glass card drops down underneath showing what it heard and then its reply. Everything slides back into the notch once Jarvis has finished speaking.
+On a Mac, Jarvis lives in the notch at the top of the screen. When you hold right Option, a black panel grows out of the notch with a live waveform of your voice. While Jarvis works, the waveform pulses, and a Liquid Glass card drops down underneath showing what it heard and then its reply. Everything slides back into the notch once Jarvis has finished speaking.
 
 Liquid Glass needs macOS 26 (Tahoe) or newer. On older macOS the card uses the frosted blur from earlier versions instead. On Macs without a notch, or on an external display, the panel appears as a small pill at the top centre of the screen. Set `JARVIS_NOTCH=0` to turn the panel off and use the terminal and notifications instead.
 
@@ -143,7 +145,7 @@ Everything is set in `.env`; see `.env.example` for the full list. The common on
 ### Speed on Ollama
 
 Local models run on your Mac's GPU, so it sits near 100% while Jarvis thinks. If replies are slow, try a smaller model. Gemma 4's `e4b` and `e2b` sizes respond noticeably faster than `12b` and can still read images: run `ollama pull gemma4:e4b`, then set `JARVIS_MODEL=gemma4:e4b`. Ollama also unloads a model after five idle minutes, which makes the next request slow while it reloads. To keep it loaded for an hour, run `launchctl setenv OLLAMA_KEEP_ALIVE 1h` and restart the Ollama app.
-- `JARVIS_DICTATE_HOLD`, `JARVIS_ASK_HOLD`, `JARVIS_COMMAND_HOLD` choose the Mac hold keys: `fn`, `right_cmd`, `right_option`, `right_ctrl` or `right_shift`. `JARVIS_HOLD_KEYS=0` switches a Mac to the press-twice hotkeys instead.
+- `JARVIS_HOLD` chooses the Mac key (default `right_option`). With `JARVIS_ONE_KEY=0`, `JARVIS_DICTATE_HOLD`, `JARVIS_ASK_HOLD` and `JARVIS_COMMAND_HOLD` choose one key per mode instead: `fn`, `right_cmd`, `right_option`, `right_ctrl` or `right_shift`. `JARVIS_HOLD_KEYS=0` switches a Mac to the press-twice hotkeys instead.
 - `JARVIS_DICTATE_KEY`, `JARVIS_ASK_KEY`, `JARVIS_COMMAND_KEY` change the press-twice hotkeys, written like `<ctrl>+<shift>+j`.
 
 Notes you save in Command mode go in `~/.jarvis/notes.json`.
@@ -157,6 +159,7 @@ Command mode's abilities live in `jarvis/tools.py`. To add one, put a new entry 
 | File | Job |
 | --- | --- |
 | `jarvis/main.py` | The dictate / ask / command flow |
+| `jarvis/router.py` | Working out dictate / ask / command from what you said |
 | `jarvis/hotkeys.py` | Press-twice hotkeys |
 | `jarvis/holdkeys.py` | Hold-to-talk keys on a Mac |
 | `jarvis/hud.py` | What Jarvis shows while it works; terminal fallback |

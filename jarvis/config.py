@@ -115,6 +115,10 @@ class Config:
     # On a Mac, hold a key to talk and let go to send. Choose from fn,
     # right_cmd, right_option, right_ctrl and right_shift.
     hold_keys: bool = platform.system() == "Darwin" and os.environ.get("JARVIS_HOLD_KEYS", "1") == "1"
+    # One key for everything (Jarvis works out dictate / ask / command from
+    # what you say), or JARVIS_ONE_KEY=0 for a separate key per mode.
+    one_key: bool = os.environ.get("JARVIS_ONE_KEY", "1") == "1"
+    jarvis_hold: str = os.environ.get("JARVIS_HOLD", "right_option")
     dictate_hold: str = os.environ.get("JARVIS_DICTATE_HOLD", "fn")
     ask_hold: str = os.environ.get("JARVIS_ASK_HOLD", "right_cmd")
     command_hold: str = os.environ.get("JARVIS_COMMAND_HOLD", "right_option")

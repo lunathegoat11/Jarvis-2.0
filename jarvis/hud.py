@@ -10,7 +10,7 @@ from collections.abc import Callable
 from . import desktop
 from .config import config
 
-MODE_LABELS = {"dictate": "Dictate", "ask": "Ask", "command": "Command"}
+MODE_LABELS = {"dictate": "Dictate", "ask": "Ask", "command": "Command", "auto": "Listening"}
 
 
 def reply_seconds(text: str) -> float:

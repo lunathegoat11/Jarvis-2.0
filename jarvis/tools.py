@@ -128,6 +128,16 @@ USE_SCREEN_TOOL = {
     "input_schema": _schema({"task": {"type": "string"}}, ["task"]),
 }
 
+LOOK_AT_SCREEN_TOOL = {
+    "name": "look_at_screen",
+    "description": (
+        "Take a screenshot and answer a question about what's on the user's "
+        "screen, e.g. 'what does this error mean' or 'summarise this page'."
+    ),
+    "strict": True,
+    "input_schema": _schema({"question": {"type": "string"}}, ["question"]),
+}
+
 EMAIL_TOOLS = [
     {
         "name": "check_email",
@@ -173,7 +183,7 @@ def command_tools(can_see_screen: bool = True) -> list[dict]:
     if mail.configured():
         tools += EMAIL_TOOLS
     if can_see_screen:
-        tools.append(USE_SCREEN_TOOL)
+        tools += [LOOK_AT_SCREEN_TOOL, USE_SCREEN_TOOL]
     return tools
 
 
