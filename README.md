@@ -38,6 +38,18 @@ These everyday commands run straight away, without waiting for the AI:
 
 Anything else, such as "open a new tab and go to Gmail", goes to the AI, which has the same abilities plus typing and reading the clipboard, and can chain several steps together. Quick commands are in `jarvis/quick.py` if you want to add your own.
 
+## The Jarvis app
+
+On a Mac, Jarvis also opens a small window of its own. When nothing is happening it shows a glowing orb of light and threads that slowly turns and breathes; it turns blue and swells with your voice while you talk, spins up while thinking, and ripples while speaking. When Jarvis is busy, the orb moves up and a feed shows what you said, each step it took, and its replies.
+
+The gear button opens settings, which take effect straight away and are remembered:
+
+- **Voice** and **speaking speed**, with a button to hear a sample
+- **Speak replies** on or off
+- **Tidy up dictation** on or off (off is faster)
+
+Closing the window just hides it. Open it again from the Jarvis icon in the menu bar, which also has Quit. Set `JARVIS_APP=0` to start without the window.
+
 ## Using your screen
 
 Ask for something that needs looking and clicking, such as "play the latest MrBeast video" or "turn on dark mode in System Settings", and Jarvis takes over the mouse and keyboard. It takes a screenshot, decides what to do, does it, and looks again, until the task is done. An orange ring shows where it's about to click. Press **Esc** at any time to stop it.
@@ -170,7 +182,9 @@ Command mode's abilities live in `jarvis/tools.py`. To add one, put a new entry 
 | `jarvis/tools.py` | What the AI can do in Command mode |
 | `jarvis/screen.py` | Screenshots, the coordinate grid, mouse and keyboard for screen control |
 | `jarvis/mail.py` | Reading email and opening drafts |
-| `jarvis/voice.py` | Jarvis's speaking voice (Kokoro or built-in) |
+| `jarvis/voice.py` | Jarvis's speaking voice, and stripping symbols from what it says |
+| `jarvis/app.py`, `jarvis/app.html` | The Jarvis app window, orb and settings |
+| `jarvis/prefs.py` | Settings changed in the app |
 | `jarvis/models.py` | Picking a model the provider still offers |
 | `jarvis/quick.py` | Quick commands that skip the AI |
 | `jarvis/desktop.py` | Typing, clipboard, screenshots, speech, opening apps |

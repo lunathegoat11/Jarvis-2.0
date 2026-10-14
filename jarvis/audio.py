@@ -65,9 +65,17 @@ class Transcriber:
             self._model = WhisperModel(config.whisper_model, device="auto", compute_type="int8")
         return self._model
 
+    def warm_up(self) -> None:
+        """Loads Whisper in the background so the first request isn't slow."""
+        threading.Thread(target=self._load, daemon=True).start()
+
     def transcribe(self, audio: np.ndarray) -> str:
         # Anything shorter than a quarter second is a stray key press.
         if audio.size < config.sample_rate // 4:
             return ""
-        segments, _ = self._load().transcribe(audio, vad_filter=True)
+        # Greedy decoding (beam_size=1) is several times faster than the
+        # default beam search and barely less accurate for short commands.
+        segments, _ = self._load().transcribe(
+            audio, beam_size=1, vad_filter=True, condition_on_previous_text=False
+        )
         return " ".join(s.text.strip() for s in segments).strip()

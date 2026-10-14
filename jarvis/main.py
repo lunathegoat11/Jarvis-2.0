@@ -5,7 +5,7 @@ import threading
 import time
 import traceback
 
-from . import desktop, quick, router, voice
+from . import desktop, prefs, quick, router, voice
 from .audio import Recorder, Transcriber
 from .brain import make_brain
 from .config import config
@@ -20,6 +20,10 @@ except ImportError:  # not a Mac, or PyObjC isn't installed
         pass
 
 
+# Dictation this short is typed as Whisper heard it, without an AI tidy-up.
+SHORT_DICTATION_WORDS = 8
+
+
 def log(message: str) -> None:
     print(f"[{time.strftime('%H:%M:%S')}] {message}", flush=True)
 
@@ -32,6 +36,14 @@ class Jarvis:
         self.hud = make_hud()
         self.hud.set_level_source(lambda: self.recorder.level)
         self.brain.attach(self.hud)
+        if config.app_window:
+            self.hud.attach_app(
+                {
+                    "provider": config.provider,
+                    "model": self.brain.model,
+                    "vision_model": self.brain.vision_model,
+                }
+            )
         self.mode: str | None = None
         # Work runs on one background thread so the hotkey listener never blocks.
         self.jobs: queue.Queue = queue.Queue()
@@ -92,7 +104,9 @@ class Jarvis:
         self.hud.thinking(text)
 
         if mode == "dictate":
-            if config.clean_dictation:
+            # Whisper already punctuates; short bits don't need the AI's
+            # tidy-up, which saves a round trip.
+            if prefs.get("clean_dictation") and len(text.split()) > SHORT_DICTATION_WORDS:
                 text = self.brain.clean_dictation(text)
             desktop.paste_text(text)
             self.hud.flash("Typed")
@@ -111,12 +125,17 @@ class Jarvis:
                 log(f"Asking {self.brain.model}...")
                 reply = self.brain.run_command(text)
         log(f"Reply: {reply!r} ({time.monotonic() - asked_at:.1f}s)")
-        self.hud.reply(reply, heard=text)
-        if config.speak_replies:
-            desktop.speak(reply)  # returns once it has finished talking
+        shown = voice.clean_for_speech(reply, keep_links=True)
+        self.hud.reply(shown, heard=text)
+        if prefs.get("speak_replies"):
+            self.hud.speaking(True)
+            try:
+                desktop.speak(reply)  # returns once it has finished talking
+            finally:
+                self.hud.speaking(False)
             self.hud.hide(after=2.0)
         else:
-            self.hud.hide(after=reply_seconds(reply))
+            self.hud.hide(after=reply_seconds(shown))
 
     def worker(self) -> None:
         while True:
@@ -131,6 +150,7 @@ class Jarvis:
     def run(self) -> None:
         threading.Thread(target=self.worker, daemon=True).start()
         voice.warm_up()
+        self.transcriber.warm_up()
         print(f"Jarvis is running, using {config.provider} ({self.brain.model}).")
 
         # Hold-to-talk needs the macOS event loop, which the notch panel runs.

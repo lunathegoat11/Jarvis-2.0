@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jarvis</title>
+<style>
+  :root {
+    --bg: #04060a;
+    --amber: #ffb547;
+    --amber-dim: rgba(255, 181, 71, 0.55);
+    --cyan: #5ad1ff;
+    --text: #e9eef5;
+    --muted: #8a96a8;
+    --line: rgba(255, 255, 255, 0.08);
+    --card: rgba(255, 255, 255, 0.04);
+    --danger: #ff6b5a;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 14px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+    -webkit-font-smoothing: antialiased; overflow: hidden; user-select: none;
+  }
+  body {
+    background:
+      radial-gradient(ellipse at 50% 38%, rgba(255, 160, 60, 0.07), transparent 60%),
+      radial-gradient(ellipse at 50% 120%, rgba(90, 209, 255, 0.06), transparent 55%),
+      var(--bg);
+  }
+  /* The titlebar is transparent; leave room for the traffic lights and let it drag. */
+  .titlebar { height: 38px; display: flex; align-items: center;
+    justify-content: flex-end; padding: 0 12px; }
+  .icon-btn { background: none; border: 1px solid var(--line);
+    color: var(--muted); width: 30px; height: 30px; border-radius: 9px; cursor: pointer;
+    display: grid; place-items: center; transition: color .15s, border-color .15s, background .15s; }
+  .icon-btn:hover { color: var(--text); border-color: rgba(255,255,255,.2); background: rgba(255,255,255,.04); }
+  .icon-btn svg { width: 16px; height: 16px; }
+
+  main { position: absolute; inset: 38px 0 0 0; display: flex; flex-direction: column; }
+  .stage { position: relative; flex: 1 1 auto; min-height: 200px; transition: flex-basis .6s cubic-bezier(.2,.8,.2,1); }
+  body.active .stage { flex: 0 0 230px; }
+  canvas#orb { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .status { position: absolute; left: 0; right: 0; bottom: 14px; text-align: center;
+    color: var(--muted); font-size: 12.5px; letter-spacing: .04em; transition: color .3s; }
+  .status b { color: var(--amber); font-weight: 600; }
+  body[data-state="listening"] .status { color: var(--cyan); }
+
+  .feed { flex: 0 0 0; overflow-y: auto; padding: 0 18px; opacity: 0;
+    transition: opacity .5s .15s, flex-basis .6s cubic-bezier(.2,.8,.2,1); }
+  body.active .feed { flex: 1 1 auto; opacity: 1; padding-bottom: 18px; }
+  .feed::-webkit-scrollbar { width: 0; }
+  .item { margin: 10px 0; padding: 10px 12px; border-radius: 12px; background: var(--card);
+    border: 1px solid var(--line); animation: rise .35s ease-out both; user-select: text; }
+  .item .who { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 3px; }
+  .item.you { border-color: rgba(90, 209, 255, .22); }
+  .item.you .who { color: var(--cyan); }
+  .item.jarvis { border-color: rgba(255, 181, 71, .25); }
+  .item.jarvis .who { color: var(--amber); }
+  .item.step { background: none; border-style: dashed; padding: 6px 12px; color: var(--muted); font-size: 12.5px; }
+  .item.error { border-color: rgba(255, 107, 90, .4); }
+  .item.error .who { color: var(--danger); }
+  .item .text { white-space: pre-wrap; word-wrap: break-word; }
+  @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+  /* Settings drawer */
+  .drawer { position: absolute; inset: 0; background: rgba(4, 6, 10, .82); backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px); transform: translateX(100%); transition: transform .35s cubic-bezier(.2,.8,.2,1);
+    display: flex; flex-direction: column; z-index: 5; }
+  .drawer.open { transform: none; }
+  .drawer header { height: 38px; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 12px 0 18px; }
+  .drawer header h2 { font-size: 13px; font-weight: 600; margin: 0; letter-spacing: .04em; }
+  .drawer .body { overflow-y: auto; padding: 8px 18px 24px; }
+  .group { border: 1px solid var(--line); border-radius: 14px; background: var(--card); margin: 12px 0; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; }
+  .row + .row { border-top: 1px solid var(--line); }
+  .row label { font-size: 13px; }
+  .row small { display: block; color: var(--muted); font-size: 11.5px; margin-top: 2px; }
+  select, .btn { font: inherit; font-size: 13px; color: var(--text);
+    background: rgba(255,255,255,.06); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
+  select { max-width: 210px; }
+  .btn { cursor: pointer; }
+  .btn:hover { background: rgba(255,255,255,.1); }
+  input[type=range] { -webkit-appearance: none; width: 150px; height: 4px; border-radius: 4px;
+    background: linear-gradient(90deg, var(--amber) var(--fill, 50%), rgba(255,255,255,.12) var(--fill, 50%)); }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px;
+    border-radius: 50%; background: #fff; box-shadow: 0 0 0 3px rgba(255,181,71,.35); cursor: pointer; }
+  .value { color: var(--muted); font-variant-numeric: tabular-nums; width: 40px; text-align: right; font-size: 12.5px; }
+  .switch { position: relative; width: 38px; height: 22px; flex: none; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch span { position: absolute; inset: 0; border-radius: 22px; background: rgba(255,255,255,.14); transition: background .2s; cursor: pointer; }
+  .switch span::after { content: ""; position: absolute; left: 3px; top: 3px; width: 16px; height: 16px;
+    border-radius: 50%; background: #fff; transition: transform .2s; }
+  .switch input:checked + span { background: var(--amber); }
+  .switch input:checked + span::after { transform: translateX(16px); }
+  .info { color: var(--muted); font-size: 12px; padding: 4px 4px 0; }
+  .info code { color: var(--text); font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; }
+</style>
+</head>
+<body data-state="idle">
+  <div class="titlebar">
+    <button class="icon-btn" id="clear" title="Clear history" aria-label="Clear history">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>
+    </button>
+    &nbsp;
+    <button class="icon-btn" id="open-settings" title="Settings" aria-label="Settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </button>
+  </div>
+
+  <main>
+    <div class="stage">
+      <canvas id="orb"></canvas>
+      <div class="status" id="status">Hold <b>right Option</b> and talk</div>
+    </div>
+    <div class="feed" id="feed"></div>
+  </main>
+
+  <section class="drawer" id="drawer" aria-label="Settings">
+    <header>
+      <h2>Settings</h2>
+      <button class="icon-btn" id="close-settings" aria-label="Close settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </header>
+    <div class="body">
+      <div class="group">
+        <div class="row">
+          <label for="voice">Voice</label>
+          <select id="voice"></select>
+        </div>
+        <div class="row">
+          <label for="speed">Speaking speed</label>
+          <div style="display:flex;align-items:center;gap:8px">
+            <input type="range" id="speed" min="0.7" max="1.6" step="0.05">
+            <span class="value" id="speed-value">1.0×</span>
+          </div>
+        </div>
+        <div class="row">
+          <div><label>Hear a sample</label><small>Uses the voice and speed above</small></div>
+          <button class="btn" id="test-voice">Play</button>
+        </div>
+      </div>
+      <div class="group">
+        <div class="row">
+          <div><label for="speak">Speak replies</label><small>Off shows replies without reading them out</small></div>
+          <label class="switch"><input type="checkbox" id="speak"><span></span></label>
+        </div>
+        <div class="row">
+          <div><label for="clean">Tidy up dictation</label><small>Off is faster; "um"s stay in</small></div>
+          <label class="switch"><input type="checkbox" id="clean"><span></span></label>
+        </div>
+      </div>
+      <div class="info" id="info"></div>
+    </div>
+  </section>
+
+<script>
+(() => {
+  // ---- bridge to Python -----------------------------------------------------
+  const post = (msg) => {
+    try { window.webkit.messageHandlers.jarvis.postMessage(JSON.stringify(msg)); } catch (e) {}
+  };
+
+  const $ = (id) => document.getElementById(id);
+  const feed = $("feed"), statusEl = $("status");
+  let state = "idle", level = 0, smoothLevel = 0, idleTimer = null;
+
+  const STATUS = {
+    idle: 'Hold <b>right Option</b> and talk',
+    listening: "Listening…",
+    thinking: "Thinking…",
+    working: "Working…",
+    speaking: "Speaking…",
+  };
+
+  function setState(next, label) {
+    state = next;
+    document.body.dataset.state = next;
+    statusEl.innerHTML = label || STATUS[next] || "";
+  }
+
+  function addItem(kind, who, text) {
+    const item = document.createElement("div");
+    item.className = "item " + kind;
+    const w = document.createElement("div"); w.className = "who"; w.textContent = who;
+    const t = document.createElement("div"); t.className = "text"; t.textContent = text;
+    item.append(w, t);
+    feed.append(item);
+    while (feed.children.length > 60) feed.firstChild.remove();
+    feed.scrollTop = feed.scrollHeight;
+    activity();
+  }
+
+  // The orb fills the window when nothing's happening; the feed slides in
+  // with activity and leaves again after a quiet spell.
+  function activity() {
+    document.body.classList.add("active");
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => {
+      if (state === "idle") document.body.classList.remove("active");
+    }, 45000);
+  }
+
+  window.jarvis = {
+    receive(evt) {
+      switch (evt.type) {
+        case "init": applySettings(evt); break;
+        case "state":
+          setState(evt.state, evt.label);
+          // Keep the big orb until there's something to show in the feed.
+          if (evt.state !== "idle" && feed.children.length) activity();
+          break;
+        case "level": level = evt.value; break;
+        case "heard": addItem("you", "You", evt.text); break;
+        case "reply": addItem("jarvis", "Jarvis", evt.text); break;
+        case "step": addItem("step", evt.title || "Working", evt.text); break;
+        case "error": addItem("error", "Problem", evt.text); break;
+      }
+    },
+  };
+
+  // ---- settings -------------------------------------------------------------
+  const voiceEl = $("voice"), speedEl = $("speed"), speakEl = $("speak"), cleanEl = $("clean");
+
+  function showSpeed() {
+    const v = parseFloat(speedEl.value);
+    $("speed-value").textContent = v.toFixed(2).replace(/0$/, "") + "×";
+    const pct = ((v - speedEl.min) / (speedEl.max - speedEl.min)) * 100;
+    speedEl.style.setProperty("--fill", pct + "%");
+  }
+
+  function applySettings(evt) {
+    voiceEl.innerHTML = "";
+    for (const v of evt.voices) {
+      const o = document.createElement("option");
+      o.value = v.id; o.textContent = v.label;
+      voiceEl.append(o);
+    }
+    const s = evt.settings;
+    if (s.voice && ![...voiceEl.options].some((o) => o.value === s.voice)) {
+      const o = document.createElement("option"); o.value = s.voice; o.textContent = s.voice; voiceEl.prepend(o);
+    }
+    voiceEl.value = s.voice || (voiceEl.options[0] && voiceEl.options[0].value) || "";
+    speedEl.value = s.voice_speed; showSpeed();
+    speakEl.checked = !!s.speak_replies;
+    cleanEl.checked = !!s.clean_dictation;
+    $("info").innerHTML =
+      `AI: <code>${evt.info.provider}</code> · <code>${evt.info.model}</code><br>` +
+      `Screen: <code>${evt.info.vision_model}</code><br>` +
+      `Voice engine: <code>${evt.info.engine}</code>`;
+  }
+
+  voiceEl.addEventListener("change", () => post({ type: "set", key: "voice", value: voiceEl.value }));
+  speedEl.addEventListener("input", showSpeed);
+  speedEl.addEventListener("change", () => post({ type: "set", key: "voice_speed", value: parseFloat(speedEl.value) }));
+  speakEl.addEventListener("change", () => post({ type: "set", key: "speak_replies", value: speakEl.checked }));
+  cleanEl.addEventListener("change", () => post({ type: "set", key: "clean_dictation", value: cleanEl.checked }));
+  $("test-voice").addEventListener("click", () => post({ type: "test_voice" }));
+  $("open-settings").addEventListener("click", () => $("drawer").classList.add("open"));
+  $("close-settings").addEventListener("click", () => $("drawer").classList.remove("open"));
+  $("clear").addEventListener("click", () => { feed.innerHTML = ""; document.body.classList.remove("active"); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") $("drawer").classList.remove("open"); });
+
+  // ---- the orb --------------------------------------------------------------
+  // A sphere of glowing nodes joined by fine threads, slowly turning. It
+  // breathes when idle, swells with your voice, spins up while thinking and
+  // ripples while speaking.
+  const canvas = $("orb"), ctx = canvas.getContext("2d");
+  const N = 360;
+  const nodes = [];
+  const golden = Math.PI * (3 - Math.sqrt(5));
+  for (let i = 0; i < N; i++) {
+    const y = 1 - (i / (N - 1)) * 2, r = Math.sqrt(1 - y * y), th = golden * i;
+    nodes.push({ x: Math.cos(th) * r, y, z: Math.sin(th) * r, seed: Math.random() * Math.PI * 2,
+                 hot: Math.random() < 0.12 });
+  }
+  const links = [];
+  for (let i = 0; i < N; i++) {
+    const near = [];
+    for (let j = 0; j < N; j++) {
+      if (i === j) continue;
+      const a = nodes[i], b = nodes[j];
+      near.push([j, (a.x - b.x) ** 2 + (a.y - b.y) ** 2 + (a.z - b.z) ** 2]);
+    }
+    near.sort((p, q) => p[1] - q[1]);
+    for (let k = 0; k < 3; k++) if (near[k][0] > i) links.push([i, near[k][0]]);
+  }
+  // A few long chords across the inside, for depth.
+  for (let k = 0; k < 40; k++) links.push([Math.floor(Math.random() * N), Math.floor(Math.random() * N)]);
+
+  let W = 0, H = 0, dpr = 1;
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = canvas.clientWidth; H = canvas.clientHeight;
+    canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+  }
+  new ResizeObserver(resize).observe(canvas);
+  resize();
+
+  let rotY = 0, rotX = 0.35, spin = 0.0025, energy = 0, t0 = performance.now();
+  const projected = new Array(N);
+
+  function frame(now) {
+    const t = (now - t0) / 1000;
+    smoothLevel += (level - smoothLevel) * 0.25;
+
+    const targetSpin = { idle: 0.0025, listening: 0.004, thinking: 0.018, working: 0.012, speaking: 0.006 }[state] || 0.003;
+    spin += (targetSpin - spin) * 0.05;
+    const targetEnergy = state === "idle" ? 0 : state === "listening" ? 0.4 + smoothLevel : 0.7;
+    energy += (targetEnergy - energy) * 0.06;
+    rotY += spin; rotX = 0.35 + Math.sin(t * 0.2) * 0.12;
+
+    const active = document.body.classList.contains("active");
+    const size = Math.min(W, H) * (active ? 0.3 : 0.34);
+    let scale = size * (1 + Math.sin(t * 1.3) * 0.02);
+    if (state === "listening") scale *= 1 + smoothLevel * 0.18;
+    const cx = W / 2, cy = H / 2 - (active ? 14 : 10);
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    // Core glow.
+    const coreR = scale * (1.25 + energy * 0.25);
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR);
+    const warm = state === "listening" ? "90, 209, 255" : "255, 170, 70";
+    g.addColorStop(0, `rgba(${warm}, ${0.22 + energy * 0.18})`);
+    g.addColorStop(0.35, `rgba(${warm}, ${0.07 + energy * 0.06})`);
+    g.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(cx, cy, coreR, 0, Math.PI * 2); ctx.fill();
+
+    const cosY = Math.cos(rotY), sinY = Math.sin(rotY), cosX = Math.cos(rotX), sinX = Math.sin(rotX);
+    for (let i = 0; i < N; i++) {
+      const n = nodes[i];
+      // Thinking sends a wave around the sphere; speaking makes it ripple.
+      let wobble = 0;
+      if (state === "thinking" || state === "working") wobble = Math.sin(t * 6 + n.y * 6 + n.seed) * 0.05;
+      if (state === "speaking") wobble = Math.sin(t * 9 - (n.y + 1) * 5) * 0.045;
+      wobble += Math.sin(t * 1.7 + n.seed) * 0.012;
+      const k = 1 + wobble;
+      let x = n.x * k, y = n.y * k, z = n.z * k;
+      const x1 = x * cosY - z * sinY, z1 = x * sinY + z * cosY;
+      const y1 = y * cosX - z1 * sinX, z2 = y * sinX + z1 * cosX;
+      const persp = 2.6 / (2.6 + z2);
+      projected[i] = { x: cx + x1 * scale * persp, y: cy + y1 * scale * persp, z: z2, hot: n.hot, seed: n.seed };
+    }
+
+    ctx.globalCompositeOperation = "lighter";
+    ctx.lineWidth = 0.7;
+    for (const [a, b] of links) {
+      const p = projected[a], q = projected[b];
+      const depth = (2 - (p.z + q.z) / 2) / 3; // nearer = brighter
+      const alpha = Math.max(0, depth * (0.16 + energy * 0.22));
+      ctx.strokeStyle = state === "listening" ? `rgba(110, 215, 255, ${alpha})` : `rgba(255, 175, 80, ${alpha})`;
+      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke();
+    }
+    for (const p of projected) {
+      const depth = (1.6 - p.z) / 2.6;
+      const twinkle = 0.75 + Math.sin(t * 3 + p.seed * 5) * 0.25;
+      const r = (p.hot ? 1.8 : 1.15) * (0.6 + depth) * (1 + energy * 0.2);
+      const a = Math.min(1, depth * twinkle * (p.hot ? 1 : 0.75));
+      const color = p.hot ? (state === "listening" ? "170, 235, 255" : "255, 225, 160")
+                          : (state === "listening" ? "90, 209, 255" : "255, 181, 71");
+      ctx.fillStyle = `rgba(${color}, ${a})`;
+      ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.fill();
+      if (p.hot && depth > 0.55) {
+        ctx.fillStyle = `rgba(${color}, ${a * 0.18})`;
+        ctx.beginPath(); ctx.arc(p.x, p.y, r * 3, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    ctx.globalCompositeOperation = "source-over";
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  post({ type: "ready" });
+})();
+</script>
+</body>
+</html>

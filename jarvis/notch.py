@@ -145,6 +145,7 @@ class NotchHUD:
         self._generation = 0
         self._phase = 0.0
         self._card_visible = False
+        self.app = None  # the Jarvis app window, once attach_app() runs
 
         self._measure_screen()
         self._build_island()
@@ -287,11 +288,16 @@ class NotchHUD:
 
         NSAnimationContext.runAnimationGroup_(changes)
 
+    def _send(self, event: dict) -> None:
+        if self.app is not None:
+            self.app.send(event)
+
     def _tick(self, timer):
         if self._state == "hidden":
             return
         if self._state == "listening":
             level = self._level()
+            self._send({"type": "level", "value": round(level, 3)})
             self.wave.levels = [
                 min(1.0, level * shape * random.uniform(0.7, 1.15)) for shape in BAR_SHAPE
             ]
@@ -344,27 +350,36 @@ class NotchHUD:
     def _listening(self, mode):
         self._set_island("listening", MODE_LABELS[mode], MODE_COLORS[mode])
         self._hide_card()
+        self._send({"type": "state", "state": "listening"})
 
     def _thinking(self, heard):
         self._set_island("thinking", "Thinking", NSColor.whiteColor())
+        self._send({"type": "state", "state": "thinking"})
         if heard:
             self._show_card("You said", heard)
+            self._send({"type": "heard", "text": heard})
         else:
             self._hide_card()
 
     def _reply(self, text, heard):
         self._set_island("reply", "Jarvis", NSColor.whiteColor())
         self._show_card(heard, text)
+        self._send({"type": "reply", "text": text})
+        self._send({"type": "state", "state": "idle"})
 
     def _flash(self, text):
         self._set_island("reply", text, NSColor.whiteColor())
         self._hide_card()
         self._schedule_hide(1.2)
+        self._send({"type": "step", "title": "Jarvis", "text": text})
+        self._send({"type": "state", "state": "idle"})
 
     def _error(self, text):
         self._set_island("reply", "Error", ERROR_COLOR)
         self._show_card("Something went wrong", text)
         self._schedule_hide(8.0)
+        self._send({"type": "error", "text": text})
+        self._send({"type": "state", "state": "idle"})
 
     def _schedule_hide(self, after):
         generation = self._generation
@@ -381,6 +396,17 @@ class NotchHUD:
     def _status(self, title, body):
         self._set_island("thinking", "Working", NSColor.whiteColor())
         self._show_card(title, body)
+        self._send({"type": "state", "state": "working"})
+        self._send({"type": "step", "title": title, "text": body})
+
+    def _speaking(self, active):
+        self._send({"type": "state", "state": "speaking" if active else "idle"})
+
+    def _attach_app(self, info):
+        from .app import JarvisApp
+
+        self.app = JarvisApp(info)
+        self.app.show()
 
     def _pointer_frame(self, x, y, size):
         return (x - size / 2, self._primary_height - y - size / 2, size, size)
@@ -406,6 +432,13 @@ class NotchHUD:
             self._animate(self.pointer_panel, alpha=0.0, duration=0.3)
 
     # ---- public API (any thread) --------------------------------------------
+
+    def attach_app(self, info: dict) -> None:
+        """Opens the Jarvis app window, with the AI details for its settings."""
+        AppHelper.callAfter(self._attach_app, info)
+
+    def speaking(self, active: bool) -> None:
+        AppHelper.callAfter(self._speaking, active)
 
     def status(self, title: str, body: str) -> None:
         AppHelper.callAfter(self._status, title, body)

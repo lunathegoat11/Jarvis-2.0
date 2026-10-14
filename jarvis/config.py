@@ -129,6 +129,9 @@ class Config:
     ask_hotkey: str = os.environ.get("JARVIS_ASK_KEY", "<ctrl>+<alt>+a")
     command_hotkey: str = os.environ.get("JARVIS_COMMAND_KEY", "<ctrl>+<alt>+j")
 
+    # The Jarvis app window with the orb and settings (Mac only).
+    app_window: bool = os.environ.get("JARVIS_APP", "1") == "1"
+
     data_dir: Path = DATA_DIR
     is_mac: bool = platform.system() == "Darwin"
     is_windows: bool = platform.system() == "Windows"

@@ -54,6 +54,12 @@ class ConsoleHUD:
     def pointer_hide(self) -> None:
         pass
 
+    def speaking(self, active: bool) -> None:
+        pass
+
+    def attach_app(self, info: dict) -> None:
+        pass
+
 
 def make_hud():
     if config.is_mac and os.environ.get("JARVIS_NOTCH", "1") == "1":
