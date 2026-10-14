@@ -97,7 +97,10 @@ class HoldTracker:
             self.spoiled = True
 
 
-def install(tracker: HoldTracker) -> list:
+ESCAPE_KEY_CODE = 53
+
+
+def install(tracker: HoldTracker, on_escape: Callable[[], None] | None = None) -> list:
     """Starts watching the keyboard on macOS. Needs the AppKit run loop.
 
     Returns the monitor objects; keep them alive for as long as Jarvis runs.
@@ -109,6 +112,8 @@ def install(tracker: HoldTracker) -> list:
 
     def on_key(event):
         tracker.key_pressed()
+        if on_escape and event.keyCode() == ESCAPE_KEY_CODE:
+            on_escape()
 
     def local(handler):
         def wrapped(event):

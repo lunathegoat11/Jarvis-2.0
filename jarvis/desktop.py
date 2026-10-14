@@ -132,6 +132,11 @@ def frontmost_app() -> str:
         return ""
 
 
+# When Jarvis last pressed keys itself, so its own Esc isn't mistaken for the
+# user asking it to stop.
+last_keys_at = 0.0
+
+
 def press_keys(combo: str) -> None:
     """Presses a shortcut such as "cmd+t" or "cmd+shift+t" in the app in front.
 
@@ -161,8 +166,10 @@ def press_keys(combo: str) -> None:
         else:
             raise ValueError(f"Unknown key: {part}")
 
+    global last_keys_at
     # Let go of the hotkey that triggered Jarvis before pressing anything.
     time.sleep(0.15)
+    last_keys_at = time.monotonic()
     keyboard = Controller()
     *held, last = keys
     for key in held:

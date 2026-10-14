@@ -116,24 +116,83 @@ TOOLS = [
     },
 ]
 
-# Claude's web search runs on Anthropic's servers, so only the Anthropic
-# provider gets it.
-ANTHROPIC_TOOLS = TOOLS + [{"type": "web_search_20260209", "name": "web_search", "max_uses": 3}]
+USE_SCREEN_TOOL = {
+    "name": "use_screen",
+    "description": (
+        "Look at the screen and use the mouse and keyboard to get something done "
+        "that needs seeing and clicking, like 'play the latest MrBeast video on "
+        "YouTube' or 'turn on dark mode in Settings'. Describe the whole task. "
+        "Takes a while, so prefer the direct tools when they're enough."
+    ),
+    "strict": True,
+    "input_schema": _schema({"task": {"type": "string"}}, ["task"]),
+}
 
-# The same tools in the OpenAI chat-completions format used by NVIDIA, Ollama
-# and other compatible providers. "strict" is left out because not every
-# provider accepts it.
-OPENAI_TOOLS = [
+EMAIL_TOOLS = [
     {
-        "type": "function",
-        "function": {
-            "name": tool["name"],
-            "description": tool["description"],
-            "parameters": tool["input_schema"],
-        },
-    }
-    for tool in TOOLS
+        "name": "check_email",
+        "description": (
+            "List the newest emails in the inbox: id, sender, subject, date, and "
+            "whether each is unread. Doesn't mark anything as read."
+        ),
+        "strict": True,
+        "input_schema": _schema(
+            {"count": {"type": "integer"}, "unread_only": {"type": "boolean"}},
+            ["count", "unread_only"],
+        ),
+    },
+    {
+        "name": "read_email",
+        "description": "Read one email in full, by the id check_email gave.",
+        "strict": True,
+        "input_schema": _schema({"id": {"type": "string"}}, ["id"]),
+    },
+    {
+        "name": "draft_email",
+        "description": (
+            "Open a new email in the user's mail app, filled in and ready for them "
+            "to check and send. You can't send email yourself."
+        ),
+        "strict": True,
+        "input_schema": _schema(
+            {"to": {"type": "string"}, "subject": {"type": "string"}, "body": {"type": "string"}},
+            ["to", "subject", "body"],
+        ),
+    },
 ]
+
+# Claude's web search runs on Anthropic's servers, so only Claude gets it.
+WEB_SEARCH_TOOL = {"type": "web_search_20260209", "name": "web_search", "max_uses": 3}
+
+
+def command_tools(can_see_screen: bool = True) -> list[dict]:
+    """The tools Command mode offers, in Anthropic's format."""
+    from . import mail
+
+    tools = list(TOOLS)
+    if mail.configured():
+        tools += EMAIL_TOOLS
+    if can_see_screen:
+        tools.append(USE_SCREEN_TOOL)
+    return tools
+
+
+def to_openai(tools: list[dict]) -> list[dict]:
+    """Converts tools to the OpenAI chat-completions format that NVIDIA,
+    Ollama and others use. "strict" is left out because not every provider
+    accepts it, and Anthropic's own server tools are dropped."""
+    return [
+        {
+            "type": "function",
+            "function": {
+                "name": tool["name"],
+                "description": tool["description"],
+                "parameters": tool["input_schema"],
+            },
+        }
+        for tool in tools
+        if "input_schema" in tool
+    ]
 
 
 def _notes_path():
@@ -180,6 +239,25 @@ def run_tool(name: str, args: dict) -> str:
             return f"Volume is now {desktop.set_volume(level=args['level'])}."
         change = 10 if action == "up" else -10
         return f"Volume is now {desktop.set_volume(change=change)}."
+    if name == "check_email":
+        from . import mail
+
+        found = mail.recent(args["count"], args["unread_only"])
+        if not found:
+            return "No emails." if not args["unread_only"] else "No unread emails."
+        return "\n".join(
+            f"id {m.id}: {'UNREAD ' if m.unread else ''}from {m.sender}, \"{m.subject}\", {m.date}"
+            for m in found
+        )
+    if name == "read_email":
+        from . import mail
+
+        return mail.read(args["id"])
+    if name == "draft_email":
+        from . import mail
+
+        mail.draft(args["to"], args["subject"], args["body"])
+        return "The draft is open in the mail app for the user to check and send."
     if name == "type_text":
         desktop.paste_text(args["text"])
         return "Typed it."

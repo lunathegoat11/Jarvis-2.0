@@ -38,6 +38,9 @@ from AppKit import (
     NSWindowStyleMaskBorderless,
     NSWindowStyleMaskNonactivatingPanel,
 )
+
+# NSWindowSharingType: not visible to screen capture.
+NSWindowSharingNone = 0
 from PyObjCTools import AppHelper
 
 from .hud import MODE_LABELS
@@ -77,6 +80,8 @@ MODE_COLORS = {
     "command": _rgb(255, 159, 10),
 }
 ERROR_COLOR = _rgb(255, 69, 58)
+POINTER_COLOR = _rgb(255, 159, 10)
+POINTER_SIZE = 34
 
 
 class WaveView(NSView):
@@ -143,6 +148,7 @@ class NotchHUD:
         self._measure_screen()
         self._build_island()
         self._build_card()
+        self._build_pointer()
 
         timer = NSTimer.timerWithTimeInterval_repeats_block_(1 / 30, True, self._tick)
         NSRunLoop.mainRunLoop().addTimer_forMode_(timer, NSRunLoopCommonModes)
@@ -185,6 +191,9 @@ class NotchHUD:
         panel.setBackgroundColor_(NSColor.clearColor())
         panel.setHasShadow_(shadow)
         panel.setAlphaValue_(0.0)
+        # Keep Jarvis's own panels out of screenshots, so Ask mode and screen
+        # control see the screen, not the notch card or the pointer.
+        panel.setSharingType_(NSWindowSharingNone)
         return panel
 
     def _build_island(self):
@@ -238,6 +247,30 @@ class NotchHUD:
             root.layer().setMasksToBounds_(True)
             root.addSubview_(self.card_content)
         self.card.setContentView_(root)
+
+    def _build_pointer(self):
+        """A glowing ring that shows where Jarvis is about to click."""
+        size = POINTER_SIZE
+        self.pointer_panel = self._panel((0, 0, size, size), shadow=False)
+        # Above the notch panel and everything else.
+        self.pointer_panel.setLevel_(NSStatusWindowLevel + 2)
+        ring = NSView.alloc().initWithFrame_(NSMakeRect(0, 0, size, size))
+        ring.setWantsLayer_(True)
+        layer = ring.layer()
+        layer.setCornerRadius_(size / 2)
+        layer.setBorderWidth_(3.0)
+        layer.setBorderColor_(POINTER_COLOR.CGColor())
+        layer.setBackgroundColor_(POINTER_COLOR.colorWithAlphaComponent_(0.22).CGColor())
+        dot = NSView.alloc().initWithFrame_(NSMakeRect(size / 2 - 3, size / 2 - 3, 6, 6))
+        dot.setWantsLayer_(True)
+        dot.layer().setCornerRadius_(3.0)
+        dot.layer().setBackgroundColor_(POINTER_COLOR.CGColor())
+        ring.addSubview_(dot)
+        self.pointer_panel.setContentView_(ring)
+        self._pointer_visible = False
+        # Screen points are measured from the top of the menu-bar screen;
+        # AppKit measures from the bottom.
+        self._primary_height = NSScreen.screens()[0].frame().size.height
 
     # ---- animation ---------------------------------------------------------
 
@@ -344,7 +377,44 @@ class NotchHUD:
         self._hide_card()
         self._animate(self.island, frame=self.collapsed, alpha=0.0, duration=0.28)
 
+    def _status(self, title, body):
+        self._set_island("thinking", "Working", NSColor.whiteColor())
+        self._show_card(title, body)
+
+    def _pointer_frame(self, x, y, size):
+        return (x - size / 2, self._primary_height - y - size / 2, size, size)
+
+    def _pointer(self, x, y, click):
+        frame = self._pointer_frame(x, y, POINTER_SIZE)
+        if not self._pointer_visible:
+            self.pointer_panel.setFrame_display_(_rect(frame), True)
+            self.pointer_panel.orderFrontRegardless()
+            self._pointer_visible = True
+            self._animate(self.pointer_panel, alpha=1.0, duration=0.15)
+        else:
+            self._animate(self.pointer_panel, frame=frame, alpha=1.0, duration=0.35)
+        if click:
+            # A quick pulse as the click lands.
+            big = self._pointer_frame(x, y, POINTER_SIZE * 1.6)
+            AppHelper.callLater(0.4, self._animate, self.pointer_panel, big, None, 0.1)
+            AppHelper.callLater(0.52, self._animate, self.pointer_panel, frame, None, 0.15)
+
+    def _pointer_hide(self):
+        if self._pointer_visible:
+            self._pointer_visible = False
+            self._animate(self.pointer_panel, alpha=0.0, duration=0.3)
+
     # ---- public API (any thread) --------------------------------------------
+
+    def status(self, title: str, body: str) -> None:
+        AppHelper.callAfter(self._status, title, body)
+
+    def pointer(self, x: float, y: float, click: bool = False) -> None:
+        """Shows the pointer ring at screen point (x, y), measured from the top left."""
+        AppHelper.callAfter(self._pointer, x, y, click)
+
+    def pointer_hide(self) -> None:
+        AppHelper.callAfter(self._pointer_hide)
 
     def run(self, main: Callable[[], None]) -> None:
         # AppKit needs the main thread, so the event loop takes it over

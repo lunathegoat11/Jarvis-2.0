@@ -2,6 +2,7 @@
 
 import queue
 import threading
+import time
 
 from . import desktop, quick
 from .audio import Recorder, Transcriber
@@ -25,6 +26,7 @@ class Jarvis:
         self.brain = make_brain()
         self.hud = make_hud()
         self.hud.set_level_source(lambda: self.recorder.level)
+        self.brain.attach(self.hud)
         self.mode: str | None = None
         # Work runs on one background thread so the hotkey listener never blocks.
         self.jobs: queue.Queue = queue.Queue()
@@ -51,6 +53,11 @@ class Jarvis:
         self.recorder.stop()
         self.mode = None
         self.hud.hide()
+
+    def _escape(self) -> None:
+        # Ignore the Esc that Jarvis itself just pressed while working.
+        if time.monotonic() - desktop.last_keys_at > 0.5:
+            self.brain.stop_event.set()
 
     def toggle(self, mode: str) -> None:
         if self.recorder.recording:
@@ -113,11 +120,12 @@ class Jarvis:
                 stop=self.stop,
                 cancel=self.cancel,
             )
-            self._monitors = holdkeys.install(tracker)
+            # Esc stops screen control between steps.
+            self._monitors = holdkeys.install(tracker, on_escape=self._escape)
             print(f"  hold {config.dictate_hold}  dictate into any text field")
             print(f"  hold {config.ask_hold}  ask about what's on your screen")
             print(f"  hold {config.command_hold}  give a command")
-            print("Talk while holding the key; let go to send.")
+            print("Talk while holding the key; let go to send. Esc stops Jarvis using your screen.")
             print("Press Ctrl+C here to quit.")
             self.hud.run(lambda: None)
             return

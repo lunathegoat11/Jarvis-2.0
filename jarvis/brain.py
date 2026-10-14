@@ -2,16 +2,22 @@
 
 There are two backends: Anthropic's API for Claude, and the OpenAI
 chat-completions format, which NVIDIA, Ollama and most other providers
-accept. make_brain() picks one from JARVIS_PROVIDER.
+accept. They differ only in how a request and its messages are shaped, so
+each backend implements four small methods (_step, _user, _results,
+_prune) and the dictate / ask / command / screen-control logic is shared.
+make_brain() picks a backend from JARVIS_PROVIDER.
 """
 
 import json
+import re
+import threading
 import time
+from dataclasses import dataclass
 from datetime import datetime
 
 from . import config as settings
 from .config import config
-from .tools import ANTHROPIC_TOOLS, OPENAI_TOOLS, run_tool
+from .tools import WEB_SEARCH_TOOL, command_tools, run_tool, to_openai
 
 DICTATE_SYSTEM = """\
 You clean up dictated speech so it can be pasted straight into a document, \
@@ -34,19 +40,68 @@ speaks commands; you carry them out with your tools, then say briefly what you \
 did. Your reply is read aloud, so keep it to one or two plain sentences with no \
 markdown. You can open apps, websites and browser tabs, search the web in the \
 browser, press keyboard shortcuts, control music and volume, type text, read \
-the clipboard, and save or read notes. Use several tools in a row when a \
-request needs it. If a request is unclear or no tool can do it, say so rather \
-than guessing."""
+the clipboard, and save or read notes. When email tools are available you can \
+check and read the user's email and open drafts for them to send; you can't \
+send email yourself. When a task needs looking at the screen and clicking \
+(finding and playing a particular video, working through a website or app), \
+use use_screen with the whole task. Use several tools in a row when a request \
+needs it. If a request is unclear or no tool can do it, say so rather than \
+guessing."""
 
 WEB_SEARCH_HINT = " Search the web when a question needs current information."
 
+SCREEN_SYSTEM = """\
+You control the user's computer by looking at screenshots and using the mouse \
+and keyboard, to finish the task you're given. Each screenshot is scaled down; \
+always give coordinates in that screenshot's pixels. {grid}\
+
+Work in small steps: do one or two actions, then look at the new screenshot \
+before going on. Click the middle of what you're aiming at. Prefer open_url \
+when you know the web address (for a YouTube channel's newest videos, open \
+https://www.youtube.com/@ChannelName/videos). Before each action, say in a few \
+words what you're doing; the user sees it.
+
+Don't buy anything, send messages or email, post, delete things, change \
+passwords or accept terms unless the task explicitly asks for exactly that. \
+If you need a password or the task looks risky, call done and say why. When \
+the task is finished, or you're stuck after a few tries, call done with a \
+one-sentence summary."""
+
+GRID_HINT = (
+    "A faint magenta grid is drawn every 100 pixels with its coordinates "
+    "labelled along the top and left edges; use it to read positions."
+)
+
 REFUSAL_REPLY = "Sorry, I can't help with that one."
+EMPTY_REPLY = "I didn't get an answer back from the AI. Try again, or try a different model."
 
 # Command-mode conversations are forgotten after this much idle time.
 COMMAND_MEMORY_SECONDS = 15 * 60
 
 # A model that keeps calling tools without finishing gets stopped here.
 MAX_TOOL_ROUNDS = 10
+
+# Screen control keeps this many of the latest screenshots in the
+# conversation for providers where old ones are trimmed.
+KEEP_SCREENSHOTS = 2
+
+
+@dataclass
+class Call:
+    id: str
+    name: str
+    args: dict | None  # None when the model's arguments weren't valid JSON
+
+
+@dataclass
+class Step:
+    """One reply from the model, in a provider-neutral shape."""
+
+    text: str
+    calls: list[Call]
+    assistant: dict  # the reply as a message to add to the conversation
+    paused: bool = False
+    refused: bool = False
 
 
 def _run_tool_safely(name: str, args: dict) -> tuple[str, bool]:
@@ -57,10 +112,46 @@ def _run_tool_safely(name: str, args: dict) -> tuple[str, bool]:
         return f"Failed: {error}", True
 
 
+class _QuietHUD:
+    def __getattr__(self, name):
+        return lambda *args, **kwargs: None
+
+
 class Brain:
+    model: str
+    vision_model: str
+
     def __init__(self):
         self._command_history: list = []
         self._last_command_at = 0.0
+        self.hud = _QuietHUD()
+        # Set (by pressing Esc) to stop screen control between steps.
+        self.stop_event = threading.Event()
+
+    def attach(self, hud) -> None:
+        self.hud = hud
+
+    # ---- what each backend provides -----------------------------------------
+
+    def _step(self, system: str, messages: list, tools: list, model: str, effort: str) -> Step:
+        raise NotImplementedError
+
+    def _user(self, text: str, image_b64: str | None = None) -> list:
+        raise NotImplementedError
+
+    def _results(self, results: list[tuple[Call, str, bool]], image_b64=None, note="") -> list:
+        raise NotImplementedError
+
+    def _prune(self, messages: list) -> None:
+        """Drops old screenshots where the provider needs it. Default: keep all."""
+
+    def _command_tools(self) -> list:
+        return command_tools(can_see_screen=bool(self.vision_model))
+
+    def _command_system(self) -> str:
+        return COMMAND_SYSTEM
+
+    # ---- shared behaviour ---------------------------------------------------
 
     def _start_command(self, command: str) -> list:
         """Returns the command history with the new command added."""
@@ -69,17 +160,105 @@ class Brain:
             self._command_history = []
         self._last_command_at = now
         stamp = datetime.now().strftime("%A %d %B %Y, %H:%M")
-        self._command_history.append({"role": "user", "content": f"[{stamp}] {command}"})
+        self._command_history.extend(self._user(f"[{stamp}] {command}"))
         return self._command_history
 
     def clean_dictation(self, transcript: str) -> str:
-        raise NotImplementedError
+        step = self._step(DICTATE_SYSTEM, self._user(transcript), [], self.model, "low")
+        if step.refused:
+            return transcript
+        return step.text or transcript
 
     def ask_about_screen(self, question: str, screenshot_b64: str) -> str:
-        raise NotImplementedError
+        step = self._step(
+            ASK_SYSTEM, self._user(question, screenshot_b64), [], self.vision_model, "medium"
+        )
+        if step.refused:
+            return REFUSAL_REPLY
+        return step.text or EMPTY_REPLY
+
+    def _run_command_tool(self, call: Call) -> tuple[str, bool]:
+        if call.args is None:
+            return "Failed: the arguments were not valid JSON.", True
+        if call.name == "use_screen":
+            try:
+                return self.operate(call.args["task"]), False
+            except Exception as error:
+                return f"Failed: {error}", True
+        return _run_tool_safely(call.name, call.args)
 
     def run_command(self, command: str) -> str:
-        raise NotImplementedError
+        history = self._start_command(command)
+        tools = self._command_tools()
+
+        for _ in range(MAX_TOOL_ROUNDS):
+            step = self._step(self._command_system(), history, tools, self.model, "medium")
+            history.append(step.assistant)
+            if step.paused:
+                continue
+            if step.refused:
+                return REFUSAL_REPLY
+            if not step.calls:
+                return step.text or EMPTY_REPLY
+            results = [(call, *self._run_command_tool(call)) for call in step.calls]
+            history.extend(self._results(results))
+
+        return "That took too many steps, so I stopped."
+
+    def operate(self, task: str) -> str:
+        """Screen control: look, act, look again, until the task is done."""
+        from . import screen
+
+        self.stop_event.clear()
+        system = SCREEN_SYSTEM.format(grid=GRID_HINT if config.screen_grid else "")
+        self.hud.status("Working on it", task)
+        shot = screen.capture(config.screen_control_width)
+        messages = self._user(
+            f"Task: {task}\nThis screenshot is {shot.width}x{shot.height} pixels.", shot.png_b64
+        )
+        try:
+            for _ in range(config.max_screen_steps):
+                if self.stop_event.is_set():
+                    return "Stopped."
+                self._prune(messages)
+                step = self._step(system, messages, screen.SCREEN_TOOLS, self.vision_model, "low")
+                messages.append(step.assistant)
+                if step.paused:
+                    continue
+                if step.refused:
+                    return REFUSAL_REPLY
+                if step.text:
+                    self.hud.status("Working on it", step.text)
+                if not step.calls:
+                    return step.text or "I couldn't finish that."
+
+                results = []
+                for call in step.calls:
+                    if call.name == "done" and call.args is not None:
+                        return call.args.get("summary") or "Done."
+                    if call.args is None:
+                        results.append((call, "Failed: the arguments were not valid JSON.", True))
+                    elif self.stop_event.is_set():
+                        results.append((call, "Skipped: the user stopped the task.", True))
+                    else:
+                        try:
+                            output = screen.run_screen_tool(call.name, call.args, shot, self.hud)
+                            results.append((call, output, False))
+                        except Exception as error:
+                            results.append((call, f"Failed: {error}", True))
+
+                time.sleep(0.6)  # let the page react before looking again
+                shot = screen.capture(config.screen_control_width)
+                messages.extend(
+                    self._results(
+                        results,
+                        shot.png_b64,
+                        f"The screen now ({shot.width}x{shot.height} pixels).",
+                    )
+                )
+            return "That took too many steps, so I stopped."
+        finally:
+            self.hud.pointer_hide()
 
 
 class AnthropicBrain(Brain):
@@ -110,77 +289,58 @@ class AnthropicBrain(Brain):
             **kwargs,
         )
 
-    @staticmethod
-    def _text(response) -> str:
-        if response.stop_reason == "refusal":
-            return REFUSAL_REPLY
-        return "".join(b.text for b in response.content if b.type == "text").strip()
+    def _command_tools(self) -> list:
+        return super()._command_tools() + [WEB_SEARCH_TOOL]
 
-    def clean_dictation(self, transcript: str) -> str:
+    def _command_system(self) -> str:
+        return COMMAND_SYSTEM + WEB_SEARCH_HINT
+
+    def _step(self, system, messages, tools, model, effort) -> Step:
+        kwargs = {}
+        if tools:
+            kwargs["tools"] = tools
         response = self._create(
-            model=self.model,
-            system=DICTATE_SYSTEM,
-            output_config={"effort": "low"},
-            messages=[{"role": "user", "content": transcript}],
+            model=model,
+            system=system,
+            output_config={"effort": effort},
+            messages=messages,
+            **kwargs,
         )
-        return self._text(response) or transcript
-
-    def ask_about_screen(self, question: str, screenshot_b64: str) -> str:
-        response = self._create(
-            model=self.vision_model,
-            system=ASK_SYSTEM,
-            output_config={"effort": "medium"},
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": "image/png",
-                                "data": screenshot_b64,
-                            },
-                        },
-                        {"type": "text", "text": question},
-                    ],
-                }
-            ],
-        )
-        return self._text(response)
-
-    def run_command(self, command: str) -> str:
-        messages = self._start_command(command)
-
-        for _ in range(MAX_TOOL_ROUNDS):
-            response = self._create(
-                model=self.model,
-                system=COMMAND_SYSTEM + WEB_SEARCH_HINT,
-                output_config={"effort": "medium"},
-                tools=ANTHROPIC_TOOLS,
-                messages=messages,
-            )
+        return Step(
+            text="".join(b.text for b in response.content if b.type == "text").strip(),
+            calls=[Call(b.id, b.name, b.input) for b in response.content if b.type == "tool_use"],
             # Keep the whole content list (thinking and tool blocks included);
             # the API expects it back unchanged on the next request.
-            messages.append({"role": "assistant", "content": response.content})
+            assistant={"role": "assistant", "content": response.content},
+            paused=response.stop_reason == "pause_turn",
+            refused=response.stop_reason == "refusal",
+        )
 
-            if response.stop_reason == "pause_turn":
-                continue
-            if response.stop_reason != "tool_use":
-                return self._text(response)
+    @staticmethod
+    def _image(image_b64: str) -> dict:
+        return {
+            "type": "image",
+            "source": {"type": "base64", "media_type": "image/png", "data": image_b64},
+        }
 
-            results = []
-            for block in response.content:
-                if block.type != "tool_use":
-                    continue
-                output, failed = _run_tool_safely(block.name, block.input)
-                result = {"type": "tool_result", "tool_use_id": block.id, "content": output}
-                if failed:
-                    result["is_error"] = True
-                results.append(result)
-            messages.append({"role": "user", "content": results})
+    def _user(self, text, image_b64=None) -> list:
+        if image_b64 is None:
+            return [{"role": "user", "content": text}]
+        return [{"role": "user", "content": [self._image(image_b64), {"type": "text", "text": text}]}]
 
-        return "That took too many steps, so I stopped."
+    def _results(self, results, image_b64=None, note="") -> list:
+        content = []
+        for call, output, failed in results:
+            block = {"type": "tool_result", "tool_use_id": call.id, "content": output}
+            if failed:
+                block["is_error"] = True
+            content.append(block)
+        if image_b64 is not None:
+            content += [self._image(image_b64), {"type": "text", "text": note}]
+        return [{"role": "user", "content": content}]
+
+
+THINK_TAGS = re.compile(r"<think>.*?</think>", re.DOTALL)
 
 
 class OpenAICompatibleBrain(Brain):
@@ -198,13 +358,19 @@ class OpenAICompatibleBrain(Brain):
         if not config.model:
             raise SystemExit("Set JARVIS_MODEL in .env to the model you want to use.")
         self.client = OpenAI(base_url=config.base_url or None, api_key=config.api_key)
-        # Thinking models (Gemma 4, Qwen 3...) reason silently before every
-        # answer, which makes a voice assistant feel very slow on a laptop.
-        # Ollama turns that off with reasoning_effort "none".
-        self._no_thinking = config.provider == "ollama" and not config.thinking
+        # Thinking models (Gemma 4, Nemotron, Qwen 3...) reason silently
+        # before every answer. That makes a voice assistant slow, and on some
+        # servers the thinking uses up the whole reply so nothing comes back.
+        self._thinking_off = {} if config.thinking else self.THINKING_OFF.get(config.provider, {})
         self.model = config.model
         self.vision_model = config.vision_model
         self._check_models()
+
+    # How each provider is asked to skip thinking.
+    THINKING_OFF = {
+        "ollama": {"reasoning_effort": "none"},
+        "nvidia": {"extra_body": {"chat_template_kwargs": {"enable_thinking": False}}},
+    }
 
     def _check_models(self):
         """Swaps retired default models for ones the provider offers today."""
@@ -237,96 +403,93 @@ class OpenAICompatibleBrain(Brain):
                 self.vision_model = replacement
 
     def _create(self, **kwargs):
-        if self._no_thinking:
+        if self._thinking_off:
             from openai import BadRequestError
 
             try:
                 return self.client.chat.completions.create(
-                    max_tokens=4096, reasoning_effort="none", **kwargs
+                    max_tokens=8192, **self._thinking_off, **kwargs
                 )
             except BadRequestError:
-                # Older Ollama versions reject the setting; carry on without it.
-                self._no_thinking = False
-        return self.client.chat.completions.create(max_tokens=4096, **kwargs)
+                # This server or model rejects the setting; carry on without it.
+                self._thinking_off = {}
+        return self.client.chat.completions.create(max_tokens=8192, **kwargs)
+
+    def _step(self, system, messages, tools, model, effort) -> Step:
+        kwargs = {}
+        if tools:
+            kwargs["tools"] = to_openai(tools)
+        response = self._create(
+            model=model,
+            messages=[{"role": "system", "content": system}, *messages],
+            **kwargs,
+        )
+        message = response.choices[0].message
+        text = THINK_TAGS.sub("", message.content or "").strip()
+
+        calls = []
+        for tool_call in message.tool_calls or []:
+            try:
+                args = json.loads(tool_call.function.arguments or "{}")
+            except json.JSONDecodeError:
+                args = None
+            calls.append(Call(tool_call.id, tool_call.function.name, args))
+
+        assistant = {"role": "assistant", "content": message.content or ""}
+        if calls:
+            assistant["tool_calls"] = [
+                {
+                    "id": tool_call.id,
+                    "type": "function",
+                    "function": {
+                        "name": tool_call.function.name,
+                        "arguments": tool_call.function.arguments,
+                    },
+                }
+                for tool_call in message.tool_calls
+            ]
+        return Step(
+            text=text,
+            calls=calls,
+            assistant=assistant,
+            refused=bool(getattr(message, "refusal", None)),
+        )
 
     @staticmethod
-    def _text(response) -> str:
-        message = response.choices[0].message
-        if getattr(message, "refusal", None):
-            return REFUSAL_REPLY
-        return (message.content or "").strip()
+    def _image(image_b64: str) -> dict:
+        return {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_b64}"}}
 
-    def clean_dictation(self, transcript: str) -> str:
-        response = self._create(
-            model=self.model,
-            messages=[
-                {"role": "system", "content": DICTATE_SYSTEM},
-                {"role": "user", "content": transcript},
-            ],
-        )
-        return self._text(response) or transcript
+    def _user(self, text, image_b64=None) -> list:
+        if image_b64 is None:
+            return [{"role": "user", "content": text}]
+        return [{"role": "user", "content": [{"type": "text", "text": text}, self._image(image_b64)]}]
 
-    def ask_about_screen(self, question: str, screenshot_b64: str) -> str:
-        response = self._create(
-            model=self.vision_model,
-            messages=[
-                {"role": "system", "content": ASK_SYSTEM},
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": question},
-                        {
-                            "type": "image_url",
-                            "image_url": {"url": f"data:image/png;base64,{screenshot_b64}"},
-                        },
-                    ],
-                },
-            ],
-        )
-        return self._text(response)
+    def _results(self, results, image_b64=None, note="") -> list:
+        messages = [
+            {"role": "tool", "tool_call_id": call.id, "content": output}
+            for call, output, _ in results
+        ]
+        # Tool messages can't carry images here, so the new screenshot goes
+        # in a user message after them.
+        if image_b64 is not None:
+            messages += self._user(note, image_b64)
+        return messages
 
-    def run_command(self, command: str) -> str:
-        history = self._start_command(command)
-
-        for _ in range(MAX_TOOL_ROUNDS):
-            response = self._create(
-                model=self.model,
-                messages=[{"role": "system", "content": COMMAND_SYSTEM}, *history],
-                tools=OPENAI_TOOLS,
-            )
-            message = response.choices[0].message
-            calls = message.tool_calls or []
-            if not calls:
-                history.append({"role": "assistant", "content": message.content or ""})
-                return self._text(response)
-
-            history.append(
-                {
-                    "role": "assistant",
-                    "content": message.content or "",
-                    "tool_calls": [
-                        {
-                            "id": call.id,
-                            "type": "function",
-                            "function": {
-                                "name": call.function.name,
-                                "arguments": call.function.arguments,
-                            },
-                        }
-                        for call in calls
-                    ],
-                }
-            )
-            for call in calls:
-                try:
-                    args = json.loads(call.function.arguments or "{}")
-                except json.JSONDecodeError:
-                    output = "Failed: the arguments were not valid JSON."
-                else:
-                    output, _ = _run_tool_safely(call.function.name, args)
-                history.append({"role": "tool", "tool_call_id": call.id, "content": output})
-
-        return "That took too many steps, so I stopped."
+    def _prune(self, messages: list) -> None:
+        """Keeps only the latest screenshots; open models have small contexts."""
+        seen = 0
+        for message in reversed(messages):
+            content = message.get("content") if isinstance(message, dict) else None
+            if not isinstance(content, list):
+                continue
+            if any(part.get("type") == "image_url" for part in content):
+                seen += 1
+                if seen > KEEP_SCREENSHOTS:
+                    message["content"] = [
+                        part if part.get("type") != "image_url"
+                        else {"type": "text", "text": "[older screenshot removed]"}
+                        for part in content
+                    ]
 
 
 def make_brain() -> Brain:

@@ -36,6 +36,32 @@ These everyday commands run straight away, without waiting for the AI:
 
 Anything else, such as "open a new tab and go to Gmail", goes to the AI, which has the same abilities plus typing and reading the clipboard, and can chain several steps together. Quick commands are in `jarvis/quick.py` if you want to add your own.
 
+## Using your screen
+
+Ask for something that needs looking and clicking, such as "play the latest MrBeast video" or "turn on dark mode in System Settings", and Jarvis takes over the mouse and keyboard. It takes a screenshot, decides what to do, does it, and looks again, until the task is done. An orange ring shows where it's about to click. Press **Esc** at any time to stop it.
+
+Jarvis won't buy anything, send messages, post, delete things or type passwords unless you asked for exactly that; it stops and tells you instead. Its own notch panel and pointer are hidden from its screenshots.
+
+How well this works depends on the model. Claude is built for it and is the most reliable. Open models on NVIDIA or Ollama can do it too, with a coordinate grid drawn on their screenshots to help them aim, but they miss more often. Screen control uses the vision model (`JARVIS_VISION_MODEL`), which has to support both images and tool calling.
+
+## Email
+
+Jarvis can read your inbox and write emails for you. It never sends anything itself: it opens a filled-in draft in your mail app, and you press Send. Try "check my email", "read the one from Sam", or "reply to Sam saying I'll be there at 6".
+
+To set it up you need an app password, which is a separate password just for Jarvis that you can delete at any time:
+
+- **Gmail:** turn on 2-Step Verification, then make one at [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords).
+- **iCloud:** make one at [account.apple.com](https://account.apple.com) under Sign-In and Security → App-Specific Passwords.
+
+Then add these lines to `.env`:
+
+```
+EMAIL_ADDRESS=you@gmail.com
+EMAIL_APP_PASSWORD=abcd efgh ijkl mnop
+```
+
+Jarvis reads your mail without marking it as read. Other providers work if they offer IMAP and app passwords; set `EMAIL_IMAP_HOST` if Jarvis doesn't know your provider's server. Outlook.com has moved away from app passwords for this, so it may not work.
+
 ## AI providers
 
 Set `JARVIS_PROVIDER` in `.env` to one of these:
@@ -125,6 +151,9 @@ Command mode's abilities live in `jarvis/tools.py`. To add one, put a new entry 
 | `jarvis/audio.py` | Microphone recording and Whisper transcription |
 | `jarvis/brain.py` | Requests to the AI provider (Anthropic, or any OpenAI-compatible API) |
 | `jarvis/tools.py` | What the AI can do in Command mode |
+| `jarvis/screen.py` | Screenshots, the coordinate grid, mouse and keyboard for screen control |
+| `jarvis/mail.py` | Reading email and opening drafts |
+| `jarvis/models.py` | Picking a model the provider still offers |
 | `jarvis/quick.py` | Quick commands that skip the AI |
 | `jarvis/desktop.py` | Typing, clipboard, screenshots, speech, opening apps |
 | `jarvis/config.py` | Settings |

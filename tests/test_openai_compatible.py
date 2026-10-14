@@ -29,7 +29,7 @@ def call(id, name, args):
 def make_brain(responses, no_thinking=False):
     b = brain.Brain.__new__(brain.OpenAICompatibleBrain)
     brain.Brain.__init__(b)
-    b._no_thinking = no_thinking
+    b._thinking_off = {"reasoning_effort": "none"} if no_thinking else {}
     b.model, b.vision_model = "text-model", "vision-model"
     fake = FakeCompletions(responses)
     b.client = NS(chat=NS(completions=fake))
@@ -143,7 +143,7 @@ def test_thinking_is_turned_off_and_old_servers_fall_back():
     old = OldServer([reply(content="hello")])
     b.client = NS(chat=NS(completions=old))
     assert b.clean_dictation("um hello") == "hello"
-    assert b._no_thinking is False
+    assert b._thinking_off == {}
     assert "reasoning_effort" not in old.calls[0]
 
 
@@ -189,3 +189,26 @@ def test_pick_follows_preference_order():
     available = ["z-ai/glm-5", "meta/llama-3.3-70b-instruct", "openai/gpt-oss-120b"]
     assert pick(available, PREFERENCES["nvidia"]["text"]) == "meta/llama-3.3-70b-instruct"
     assert pick(["something/else"], PREFERENCES["nvidia"]["text"]) is None
+
+
+def test_nvidia_asks_for_no_thinking_and_think_tags_are_stripped():
+    b, fake = make_brain([reply(content="<think>hmm</think> Done.")])
+    b._thinking_off = brain.OpenAICompatibleBrain.THINKING_OFF["nvidia"]
+    assert b.run_command("do it") == "Done."
+    assert fake.calls[0]["extra_body"] == {"chat_template_kwargs": {"enable_thinking": False}}
+
+
+def test_empty_answer_says_so():
+    b, _ = make_brain([reply(content="")])
+    assert b.run_command("hello") == brain.EMPTY_REPLY
+
+
+def test_old_screenshots_are_pruned():
+    b, _ = make_brain([])
+    messages = []
+    for i in range(4):
+        messages += b._user(f"shot {i}", "IMG")
+    b._prune(messages)
+    with_images = [m for m in messages if any(p.get("type") == "image_url" for p in m["content"])]
+    assert len(with_images) == brain.KEEP_SCREENSHOTS
+    assert messages[0]["content"][1] == {"type": "text", "text": "[older screenshot removed]"}

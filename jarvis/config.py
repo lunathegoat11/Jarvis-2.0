@@ -92,6 +92,18 @@ class Config:
     screenshot_width: int = int(
         os.environ.get("JARVIS_SCREENSHOT_WIDTH", "1568" if PROVIDER == "anthropic" else "1024")
     )
+    # Screen control: how big the screenshots are, whether to draw a
+    # coordinate grid on them (helps open models click accurately), and how
+    # many steps a task may take.
+    screen_control_width: int = int(os.environ.get("JARVIS_SCREEN_WIDTH", "1280"))
+    screen_grid: bool = os.environ.get("JARVIS_SCREEN_GRID", "0" if PROVIDER == "anthropic" else "1") == "1"
+    max_screen_steps: int = int(os.environ.get("JARVIS_MAX_SCREEN_STEPS", "25"))
+
+    # Email: your address and an app password (not your normal password).
+    email_address: str = os.environ.get("EMAIL_ADDRESS", "")
+    email_app_password: str = os.environ.get("EMAIL_APP_PASSWORD", "").replace(" ", "")
+    email_imap_host: str = os.environ.get("EMAIL_IMAP_HOST", "")
+
     sample_rate: int = 16000
 
     # On a Mac, hold a key to talk and let go to send. Choose from fn,
