@@ -405,6 +405,9 @@ class NotchHUD:
         self._send({"type": "state", "state": "speaking" if active else "idle"})
 
     def _attach_app(self, info):
+        if self.app is not None:  # never open a second app window
+            self.app.show()
+            return
         from .app import JarvisApp
 
         self.app = JarvisApp(info)

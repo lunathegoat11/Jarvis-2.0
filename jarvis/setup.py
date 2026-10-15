@@ -47,8 +47,15 @@ def relaunch() -> None:
     from AppKit import NSApplication, NSBundle
 
     if settings.IS_APP:
+        # Release our single-instance lock so the fresh copy can take it.
+        from . import main as jarvis_main
+
+        if jarvis_main._instance_lock is not None:
+            jarvis_main._instance_lock.close()
         bundle = str(NSBundle.mainBundle().bundlePath())
-        subprocess.Popen(["/bin/sh", "-c", f"sleep 1; open -n {shlex.quote(bundle)}"])
+        # The 2s delay lets this copy fully exit before the new one starts, so
+        # only one Jarvis is ever running.
+        subprocess.Popen(["/bin/sh", "-c", f"sleep 2; open -n {shlex.quote(bundle)}"])
     else:
         print("Settings saved. Start Jarvis again with: python -m jarvis")
     NSApplication.sharedApplication().terminate_(None)

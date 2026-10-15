@@ -28,6 +28,35 @@ def log(message: str) -> None:
     print(f"[{time.strftime('%H:%M:%S')}] {message}", flush=True)
 
 
+# Held open for the whole run so a second Jarvis can't start; the OS releases
+# it automatically when this process exits.
+_instance_lock = None
+
+
+def acquire_single_instance(wait_seconds: float = 3.0) -> bool:
+    """True if this is the only Jarvis running. False means one already is.
+
+    Retries briefly so the app's own restart after setup can hand the lock
+    over as the old copy exits, while a genuine second launch still fails.
+    """
+    global _instance_lock
+    try:
+        import fcntl
+    except Exception:
+        return True  # no fcntl (e.g. Windows): don't block startup over the lock
+    config.data_dir.mkdir(parents=True, exist_ok=True)
+    _instance_lock = open(config.data_dir / "jarvis.lock", "w")
+    deadline = time.monotonic() + wait_seconds
+    while True:
+        try:
+            fcntl.flock(_instance_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return True
+        except OSError:
+            if time.monotonic() >= deadline:
+                return False
+            time.sleep(0.25)
+
+
 class Jarvis:
     def __init__(self):
         self.recorder = Recorder()
@@ -260,6 +289,9 @@ class Jarvis:
 
 
 def main() -> None:
+    if not acquire_single_instance():
+        print("Jarvis is already running. Quit the other copy first (menu-bar icon > Quit).")
+        return
     try:
         jarvis = Jarvis()
     except SystemExit as problem:
