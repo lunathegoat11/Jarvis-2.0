@@ -48,3 +48,64 @@ def test_twilio_is_preferred_when_set_up(monkeypatch):
     assert calls[0][1]["To"] == "+15551234567" and calls[0][1]["Body"] == "hey"
     assert contact.call_me("wake up") == "Calling you now."
     assert "wake up" in calls[1][1]["Twiml"]
+
+
+def test_half_set_up_twilio_says_what_is_missing(monkeypatch):
+    # Without this, Jarvis quietly used iMessage instead and hit a Messages
+    # permission error that had nothing to do with Twilio.
+    monkeypatch.setattr(contact, "config", Config(is_mac=True, twilio_from="+17372324091"))
+    monkeypatch.setattr(contact.prefs, "get", lambda k, d=None: "+15551234567" if k == "my_number" else d)
+    with pytest.raises(RuntimeError, match="TWILIO_SID, TWILIO_TOKEN"):
+        contact.text_me("hi")
+
+
+def test_numbers_are_put_in_the_form_twilio_needs():
+    assert contact.e164("(609) 721-6948") == "+16097216948"
+    assert contact.e164("1 609 721 6948") == "+16097216948"
+    assert contact.e164("+44 7700 900123") == "+447700900123"
+
+
+def test_twilio_errors_are_explained(monkeypatch):
+    import io
+    import urllib.error
+
+    cfg = Config(is_mac=True, twilio_sid="AC1", twilio_token="t", twilio_from="+1999")
+    monkeypatch.setattr(contact, "config", cfg)
+    monkeypatch.setattr(contact.prefs, "get", lambda k, d=None: "+15551234567" if k == "my_number" else d)
+
+    def refuse(request, timeout):
+        body = io.BytesIO(b'{"code": 21608, "message": "unverified"}')
+        raise urllib.error.HTTPError(request.full_url, 400, "Bad Request", {}, body)
+
+    monkeypatch.setattr(contact.urllib.request, "urlopen", refuse)
+    with pytest.raises(RuntimeError, match="verified numbers"):
+        contact.text_me("hi")
+
+
+def test_call_text_is_escaped_for_twiml(monkeypatch):
+    cfg = Config(is_mac=True, twilio_sid="AC1", twilio_token="t", twilio_from="+1999")
+    monkeypatch.setattr(contact, "config", cfg)
+    monkeypatch.setattr(contact.prefs, "get", lambda k, d=None: "+15551234567" if k == "my_number" else d)
+    sent = []
+    monkeypatch.setattr(contact, "_twilio_request", lambda path, fields: sent.append(fields) or {})
+    contact.call_me("Rent & bills <due>")
+    assert "Rent &amp; bills &lt;due&gt;" in sent[0]["Twiml"]
+
+
+def test_twilio_accepts_its_own_setting_names(monkeypatch):
+    import importlib
+
+    from jarvis import config as config_module
+
+    monkeypatch.setenv("TWILIO_ACCOUNT_SID", ' "AC123" ')
+    monkeypatch.setenv("TWILIO_AUTH_TOKEN", "secret")
+    monkeypatch.setenv("TWILIO_PHONE_NUMBER", "+17372324091")
+    try:
+        reloaded = importlib.reload(config_module)
+        assert reloaded.config.twilio_sid == "AC123"
+        assert reloaded.config.twilio_token == "secret"
+        assert reloaded.config.twilio_from == "+17372324091"
+    finally:
+        for name in ("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER"):
+            monkeypatch.delenv(name, raising=False)
+        importlib.reload(config_module)

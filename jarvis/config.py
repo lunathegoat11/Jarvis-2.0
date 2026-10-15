@@ -59,6 +59,15 @@ def _setting(env_name: str, preset_key: str) -> str:
     return os.environ.get(env_name) or _preset.get(preset_key, "")
 
 
+def _first(*env_names: str) -> str:
+    """The first of these settings that's set, minus stray spaces and quotes."""
+    for name in env_names:
+        value = os.environ.get(name, "").strip().strip("\"'").strip()
+        if value:
+            return value
+    return ""
+
+
 def _int(env_name: str, default: int) -> int:
     """A number from the environment, falling back if it's blank or garbled
     (e.g. a stray value left in .env), so one bad line can't stop Jarvis."""
@@ -154,9 +163,10 @@ class Config:
     # So Jarvis can text and call you. On a Mac it uses your own iMessage and
     # FaceTime; Twilio (below) gives it a real separate number instead.
     my_number: str = os.environ.get("JARVIS_MY_NUMBER", "")
-    twilio_sid: str = os.environ.get("TWILIO_SID", "")
-    twilio_token: str = os.environ.get("TWILIO_TOKEN", "")
-    twilio_from: str = os.environ.get("TWILIO_FROM", "")
+    # Twilio's own names (TWILIO_ACCOUNT_SID, ...) work too.
+    twilio_sid: str = _first("TWILIO_SID", "TWILIO_ACCOUNT_SID")
+    twilio_token: str = _first("TWILIO_TOKEN", "TWILIO_AUTH_TOKEN")
+    twilio_from: str = _first("TWILIO_FROM", "TWILIO_PHONE_NUMBER", "TWILIO_NUMBER")
 
     sample_rate: int = 16000
     # Which microphone to use. "auto" prefers the computer's own mic over

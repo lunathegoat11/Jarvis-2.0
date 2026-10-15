@@ -11,6 +11,7 @@ Set your number in the app settings, or JARVIS_MY_NUMBER in .env.
 
 import json
 import subprocess
+import urllib.error
 import urllib.request
 
 from . import prefs
@@ -28,6 +29,44 @@ def configured() -> bool:
 
 def twilio_configured() -> bool:
     return bool(config.twilio_sid and config.twilio_token and config.twilio_from)
+
+
+def _twilio_missing() -> list[str]:
+    """The Twilio settings still missing, if Twilio is partly set up."""
+    settings = {
+        "TWILIO_SID": config.twilio_sid,
+        "TWILIO_TOKEN": config.twilio_token,
+        "TWILIO_FROM": config.twilio_from,
+    }
+    if not any(settings.values()):
+        return []
+    return [name for name, value in settings.items() if not value]
+
+
+def _check_twilio() -> bool:
+    """True to use Twilio. Refuses to quietly fall back to iMessage when
+    Twilio is only half set up, since that hides what's wrong."""
+    if twilio_configured():
+        return True
+    missing = _twilio_missing()
+    if missing:
+        raise RuntimeError(
+            f"Twilio is only partly set up: {', '.join(missing)} missing from ~/.jarvis/.env."
+        )
+    return False
+
+
+def e164(number: str) -> str:
+    """A phone number in the +15551234567 form Twilio needs. Ten digits
+    without a country code are taken as a US number."""
+    digits = "".join(ch for ch in number if ch.isdigit())
+    if number.strip().startswith("+"):
+        return "+" + digits
+    if len(digits) == 10:
+        return "+1" + digits
+    if len(digits) == 11 and digits.startswith("1"):
+        return "+" + digits
+    return "+" + digits
 
 
 def _applescript(script: str) -> None:
@@ -52,8 +91,8 @@ def text_me(message: str) -> str:
     number = my_number()
     if not number:
         raise RuntimeError("No number set. Add your number in Jarvis's settings.")
-    if twilio_configured():
-        return _twilio_text(number, message)
+    if _check_twilio():
+        return _twilio_text(e164(number), message)
     if not config.is_mac:
         raise RuntimeError("Texting needs a Mac (Messages) or Twilio set up.")
     script = (
@@ -71,8 +110,8 @@ def call_me(reason: str = "") -> str:
     number = my_number()
     if not number:
         raise RuntimeError("No number set. Add your number in Jarvis's settings.")
-    if twilio_configured():
-        return _twilio_call(number, reason)
+    if _check_twilio():
+        return _twilio_call(e164(number), reason)
     if not config.is_mac:
         raise RuntimeError("Calling needs a Mac (FaceTime) or Twilio set up.")
     # The facetime-audio URL opens FaceTime and places the call.
@@ -91,21 +130,51 @@ def _twilio_request(path: str, fields: dict) -> dict:
     data = urllib.parse.urlencode(fields).encode()
     auth = base64.b64encode(f"{config.twilio_sid}:{config.twilio_token}".encode()).decode()
     request = urllib.request.Request(url, data=data, headers={"Authorization": f"Basic {auth}"})
-    with urllib.request.urlopen(request, timeout=20) as reply:
-        return json.loads(reply.read() or b"{}")
+    try:
+        with urllib.request.urlopen(request, timeout=20) as reply:
+            return json.loads(reply.read() or b"{}")
+    except urllib.error.HTTPError as error:
+        raise RuntimeError(_twilio_problem(error)) from None
+
+
+# Plain-English help for the Twilio errors people hit while setting up.
+TWILIO_HINTS = {
+    20003: "Twilio rejected the Account SID or Auth Token. Copy both again from the "
+    "Twilio Console home page into ~/.jarvis/.env.",
+    21211: "Twilio says your number isn't a valid phone number. Check it in Jarvis's settings.",
+    21606: "TWILIO_FROM isn't a number on your Twilio account that can send texts.",
+    21608: "A Twilio trial account can only text and call verified numbers. Verify your "
+    "number in the Twilio Console under Phone Numbers > Verified Caller IDs.",
+    21659: "TWILIO_FROM isn't a number on your Twilio account.",
+}
+
+
+def _twilio_problem(error) -> str:
+    try:
+        body = json.loads(error.read() or b"{}")
+    except ValueError:
+        body = {}
+    code = body.get("code")
+    if code in TWILIO_HINTS:
+        return TWILIO_HINTS[code]
+    message = body.get("message") or f"HTTP {error.code}"
+    return f"Twilio said: {message}" + (f" (error {code})" if code else "")
 
 
 def _twilio_text(number: str, message: str) -> str:
-    _twilio_request("Messages.json", {"To": number, "From": config.twilio_from, "Body": message})
+    _twilio_request("Messages.json", {"To": number, "From": e164(config.twilio_from), "Body": message})
     return "Texted you."
 
 
 def _twilio_call(number: str, reason: str) -> str:
-    # Twilio reads this TwiML aloud when you pick up.
-    words = reason or "Hello, this is Jarvis calling."
-    twiml = f"<Response><Say>{words}</Say></Response>"
+    from xml.sax.saxutils import escape
+
+    # Twilio reads this aloud when you pick up. Twilio can't play Jarvis's
+    # own Kokoro voice, so it uses Brian, the closest British man's voice.
+    words = escape(reason or "Hello, this is Jarvis calling.")
+    twiml = f'<Response><Say voice="Polly.Brian">{words}</Say></Response>'
     _twilio_request(
         "Calls.json",
-        {"To": number, "From": config.twilio_from, "Twiml": twiml},
+        {"To": number, "From": e164(config.twilio_from), "Twiml": twiml},
     )
     return "Calling you now."
