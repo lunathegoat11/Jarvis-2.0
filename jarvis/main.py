@@ -155,17 +155,20 @@ class Jarvis:
         import numpy as np
 
         peak = float(np.abs(audio).max()) if len(audio) else 0.0
-        log(f"Got {seconds:.1f}s of audio (peak {peak:.3f}), transcribing...")
-        if seconds >= 0.3 and peak < 0.01:
-            log("The microphone gave silence. Is Jarvis allowed to use it?")
-            self.hud.error(
-                "I can't hear your microphone. Allow Jarvis under System "
-                "Settings > Privacy & Security > Microphone, then quit and reopen Jarvis."
-            )
-            return
+        log(f"Got {seconds:.1f}s of audio (peak {peak:.4f}), transcribing...")
         vocabulary = str(prefs.get("vocabulary") or "")
         text = self.transcriber.transcribe(audio, vocabulary)
         if not current():
+            return
+        # Only blame the microphone when Whisper heard nothing AND the audio
+        # was flat. Quiet Mac mics can peak low and still be perfectly usable.
+        if not text and seconds >= 0.3 and peak < 0.001:
+            log("The microphone gave silence. Is Jarvis allowed to use it?")
+            self.hud.error(
+                "I can't hear your microphone. Allow Terminal (or Jarvis, if you use the "
+                "app) under System Settings > Privacy & Security > Microphone, then quit "
+                "and reopen it."
+            )
             return
         if not text:
             log("Heard nothing.")
