@@ -59,6 +59,22 @@ def _setting(env_name: str, preset_key: str) -> str:
     return os.environ.get(env_name) or _preset.get(preset_key, "")
 
 
+def _int(env_name: str, default: int) -> int:
+    """A number from the environment, falling back if it's blank or garbled
+    (e.g. a stray value left in .env), so one bad line can't stop Jarvis."""
+    try:
+        return int(str(os.environ.get(env_name, default)).strip())
+    except (TypeError, ValueError):
+        return default
+
+
+def _float(env_name: str, default: float) -> float:
+    try:
+        return float(str(os.environ.get(env_name, default)).strip())
+    except (TypeError, ValueError):
+        return default
+
+
 def _api_key() -> str:
     if os.environ.get("JARVIS_API_KEY"):
         return os.environ["JARVIS_API_KEY"]
@@ -98,7 +114,7 @@ class Config:
     # bm_george for Kokoro or Daniel for macOS.
     voice_engine: str = os.environ.get("JARVIS_VOICE_ENGINE", "auto").lower()
     voice: str = os.environ.get("JARVIS_VOICE", "")
-    voice_speed: float = float(os.environ.get("JARVIS_VOICE_SPEED", "1.0"))
+    voice_speed: float = _float("JARVIS_VOICE_SPEED", 1.0)
     # Whisper already adds punctuation, so dictation can skip the AI tidy-up
     # (filler words stay in) to save a round trip to the model.
     clean_dictation: bool = os.environ.get("JARVIS_CLEAN_DICTATION", "1") == "1"
@@ -106,15 +122,15 @@ class Config:
     thinking: bool = os.environ.get("JARVIS_THINKING", "0") == "1"
     # Smaller screenshots make Ask mode much faster on local models, which
     # spend most of their time reading the image.
-    screenshot_width: int = int(
-        os.environ.get("JARVIS_SCREENSHOT_WIDTH", "1568" if PROVIDER == "anthropic" else "1024")
+    screenshot_width: int = _int(
+        "JARVIS_SCREENSHOT_WIDTH", 1568 if PROVIDER == "anthropic" else 1024
     )
     # Screen control: how big the screenshots are, whether to draw a
     # coordinate grid on them (helps open models click accurately), and how
     # many steps a task may take.
-    screen_control_width: int = int(os.environ.get("JARVIS_SCREEN_WIDTH", "1280"))
+    screen_control_width: int = _int("JARVIS_SCREEN_WIDTH", 1280)
     screen_grid: bool = os.environ.get("JARVIS_SCREEN_GRID", "0" if PROVIDER == "anthropic" else "1") == "1"
-    max_screen_steps: int = int(os.environ.get("JARVIS_MAX_SCREEN_STEPS", "25"))
+    max_screen_steps: int = _int("JARVIS_MAX_SCREEN_STEPS", 25)
 
     # Email: your address and an app password (not your normal password).
     email_address: str = os.environ.get("EMAIL_ADDRESS", "")

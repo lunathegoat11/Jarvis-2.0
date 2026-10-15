@@ -53,3 +53,24 @@ def test_events_need_confirmation(monkeypatch):
     assert "confirm" in tools.run_tool("add_calendar_event", {**args, "confirmed": False})
     assert called == []
     assert tools.run_tool("add_calendar_event", {**args, "confirmed": True}) == "Added."
+
+
+def test_garbled_env_numbers_fall_back_instead_of_crashing(monkeypatch):
+    # A stray or mangled value in .env (e.g. from editing it by hand) must not
+    # stop Jarvis from starting: the number falls back to its default.
+    import importlib
+
+    from jarvis import config as config_module
+
+    monkeypatch.setenv("JARVIS_VOICE_SPEED", "fast")
+    monkeypatch.setenv("JARVIS_SCREEN_WIDTH", "")
+    monkeypatch.setenv("JARVIS_MAX_SCREEN_STEPS", "lots ")
+    reloaded = importlib.reload(config_module)
+    try:
+        assert reloaded.config.voice_speed == 1.0
+        assert reloaded.config.screen_control_width == 1280
+        assert reloaded.config.max_screen_steps == 25
+    finally:
+        for name in ("JARVIS_VOICE_SPEED", "JARVIS_SCREEN_WIDTH", "JARVIS_MAX_SCREEN_STEPS"):
+            monkeypatch.delenv(name, raising=False)
+        importlib.reload(config_module)

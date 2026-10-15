@@ -313,15 +313,18 @@ def main() -> None:
         return
     try:
         jarvis = Jarvis()
-    except SystemExit as problem:
+    except (SystemExit, Exception) as problem:
         # The downloadable app has no terminal to show this in, so it opens a
-        # setup screen instead (missing or wrong key, unknown provider, ...).
+        # setup screen instead of just vanishing (missing or wrong key, unknown
+        # provider, a mangled .env line, a provider that won't load, ...).
         if config.is_mac and settings.IS_APP:
             from .setup import run_setup_window
 
-            run_setup_window(str(problem))
+            run_setup_window(str(problem) or problem.__class__.__name__)
             return
-        raise
+        # Running from the terminal: print it plainly so the cause is visible.
+        traceback.print_exc()
+        raise SystemExit(str(problem) or problem.__class__.__name__)
     try:
         jarvis.run()
     except KeyboardInterrupt:

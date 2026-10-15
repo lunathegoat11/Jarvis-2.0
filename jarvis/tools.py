@@ -283,15 +283,20 @@ HOME_ASSISTANT_TOOLS = [
 CONTACT_TOOLS = [
     {
         "name": "text_me",
-        "description": "Send the user a text message (to their own phone).",
+        "description": (
+            "Send the user a text message to their own phone. Use it when they ask, or "
+            "on your own when something genuinely urgent or time-sensitive comes up and "
+            "they should know now. This is the default way to reach them."
+        ),
         "strict": True,
         "input_schema": _schema({"message": {"type": "string"}}, ["message"]),
     },
     {
         "name": "call_me",
         "description": (
-            "Call the user's phone. On a Mac this is a FaceTime audio call; give a short "
-            "reason to say (used only if calling through a phone service)."
+            "Call the user's phone, for something that truly can't wait for a text. On a "
+            "Mac this is a FaceTime audio call; give a short reason to say (used only if "
+            "calling through a phone service). Prefer text_me unless it's really urgent."
         ),
         "strict": True,
         "input_schema": _schema({"reason": {"type": "string"}}, ["reason"]),
