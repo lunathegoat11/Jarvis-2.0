@@ -4,7 +4,9 @@ On a Mac this uses your own Messages and FaceTime, signed into your Apple
 ID: a text arrives from you, and a call is a FaceTime audio call placed
 from your Mac to your number (so it rings your phone). Jarvis doesn't get
 its own number this way. For a real separate number that can SMS and call,
-set up Twilio (see the README) and Jarvis uses that instead.
+set up Twilio (see the README) and Jarvis uses that instead. For free
+alerts with no phone number at all, set NTFY_TOPIC and install the ntfy app;
+that takes priority over both.
 
 Set your number in the app settings, or JARVIS_MY_NUMBER in .env.
 """
@@ -23,8 +25,15 @@ def my_number() -> str:
 
 
 def configured() -> bool:
-    # A Mac can text/call through your own Apple ID; otherwise Twilio is needed.
+    # ntfy needs no number. A Mac can text/call through your own Apple ID;
+    # otherwise Twilio is needed.
+    if ntfy_configured():
+        return True
     return bool(my_number()) and (config.is_mac or twilio_configured())
+
+
+def ntfy_configured() -> bool:
+    return bool(config.ntfy_topic)
 
 
 def twilio_configured() -> bool:
@@ -88,6 +97,8 @@ def _quote(text: str) -> str:
 
 def text_me(message: str) -> str:
     """Sends you a text."""
+    if ntfy_configured():
+        return _ntfy(message, urgent=False)
     number = my_number()
     if not number:
         raise RuntimeError("No number set. Add your number in Jarvis's settings.")
@@ -106,7 +117,10 @@ def text_me(message: str) -> str:
 
 
 def call_me(reason: str = "") -> str:
-    """Calls you: a FaceTime audio call on a Mac, or a Twilio call otherwise."""
+    """Calls you: a FaceTime audio call on a Mac, or a Twilio call otherwise.
+    With ntfy it's an urgent alert instead, since ntfy can't ring."""
+    if ntfy_configured():
+        return _ntfy(reason or "Jarvis needs you.", urgent=True)
     number = my_number()
     if not number:
         raise RuntimeError("No number set. Add your number in Jarvis's settings.")
@@ -117,6 +131,36 @@ def call_me(reason: str = "") -> str:
     # The facetime-audio URL opens FaceTime and places the call.
     subprocess.run(["open", f"facetime-audio://{number}"], check=True)
     return "Calling you on FaceTime."
+
+
+# ---- ntfy (free phone notifications, optional) -------------------------------
+
+
+def _ntfy(message: str, urgent: bool) -> str:
+    url = f"{config.ntfy_server.rstrip('/')}/{config.ntfy_topic}"
+    headers = {
+        "Title": "Jarvis needs you" if urgent else "Jarvis",
+        # 5 is ntfy's top priority: a long buzz, and on Android it can sound
+        # through Do Not Disturb if you allow it in the app.
+        "Priority": "5" if urgent else "3",
+        "Tags": "rotating_light" if urgent else "speech_balloon",
+    }
+    if config.ntfy_token:
+        headers["Authorization"] = f"Bearer {config.ntfy_token}"
+    request = urllib.request.Request(url, data=message.encode("utf-8"), headers=headers)
+    try:
+        with urllib.request.urlopen(request, timeout=20):
+            pass
+    except urllib.error.HTTPError as error:
+        if error.code in (401, 403):
+            raise RuntimeError(
+                "ntfy refused the message. That topic is protected; set NTFY_TOKEN, "
+                "or pick a different NTFY_TOPIC."
+            ) from None
+        raise RuntimeError(f"ntfy said: HTTP {error.code}") from None
+    except urllib.error.URLError as error:
+        raise RuntimeError(f"Couldn't reach ntfy ({error.reason}). Is the Mac online?") from None
+    return "Sent an urgent alert to your phone." if urgent else "Sent it to your phone."
 
 
 # ---- Twilio (a real separate number, optional) ------------------------------

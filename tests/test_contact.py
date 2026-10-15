@@ -109,3 +109,50 @@ def test_twilio_accepts_its_own_setting_names(monkeypatch):
         for name in ("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER"):
             monkeypatch.delenv(name, raising=False)
         importlib.reload(config_module)
+
+
+def _ntfy_config(**kw):
+    return Config(is_mac=True, ntfy_topic="jarvis-abc123", ntfy_server="https://ntfy.sh", **kw)
+
+
+def test_ntfy_sends_without_a_phone_number(monkeypatch):
+    # ntfy wins over Twilio, so a Twilio trial account can't get in the way.
+    cfg = _ntfy_config(twilio_sid="AC1", twilio_token="t", twilio_from="+1999")
+    monkeypatch.setattr(contact, "config", cfg)
+    monkeypatch.setattr(contact.prefs, "get", lambda k, d=None: "")
+    sent = []
+
+    class Reply:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    def fake_urlopen(request, timeout):
+        sent.append(request)
+        return Reply()
+
+    monkeypatch.setattr(contact.urllib.request, "urlopen", fake_urlopen)
+    assert contact.configured()
+    assert contact.text_me("Meeting moved to 3") == "Sent it to your phone."
+    assert sent[0].full_url == "https://ntfy.sh/jarvis-abc123"
+    assert sent[0].data == b"Meeting moved to 3"
+    assert sent[0].get_header("Priority") == "3"
+    assert contact.call_me("Your flight is boarding") == "Sent an urgent alert to your phone."
+    assert sent[1].get_header("Priority") == "5"
+    assert sent[1].data == b"Your flight is boarding"
+
+
+def test_ntfy_protected_topic_is_explained(monkeypatch):
+    import io
+    import urllib.error
+
+    monkeypatch.setattr(contact, "config", _ntfy_config())
+
+    def refuse(request, timeout):
+        raise urllib.error.HTTPError(request.full_url, 403, "Forbidden", {}, io.BytesIO(b""))
+
+    monkeypatch.setattr(contact.urllib.request, "urlopen", refuse)
+    with pytest.raises(RuntimeError, match="NTFY_TOKEN"):
+        contact.text_me("hi")

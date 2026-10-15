@@ -294,9 +294,9 @@ CONTACT_TOOLS = [
     {
         "name": "call_me",
         "description": (
-            "Call the user's phone, for something that truly can't wait for a text. On a "
-            "Mac this is a FaceTime audio call; give a short reason to say (used only if "
-            "calling through a phone service). Prefer text_me unless it's really urgent."
+            "Call the user's phone, or send an urgent alert when calls aren't set up, for "
+            "something that truly can't wait for a text. Give a short reason; it's read "
+            "out or shown to them. Prefer text_me unless it's really urgent."
         ),
         "strict": True,
         "input_schema": _schema({"reason": {"type": "string"}}, ["reason"]),

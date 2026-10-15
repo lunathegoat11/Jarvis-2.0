@@ -167,6 +167,12 @@ class Config:
     twilio_sid: str = _first("TWILIO_SID", "TWILIO_ACCOUNT_SID")
     twilio_token: str = _first("TWILIO_TOKEN", "TWILIO_AUTH_TOKEN")
     twilio_from: str = _first("TWILIO_FROM", "TWILIO_PHONE_NUMBER", "TWILIO_NUMBER")
+    # ntfy: free phone notifications instead of texts (https://ntfy.sh). The
+    # topic is like a password, so make it long and random. A token is only
+    # needed for a protected topic or your own ntfy server.
+    ntfy_topic: str = _first("NTFY_TOPIC")
+    ntfy_server: str = _first("NTFY_SERVER") or "https://ntfy.sh"
+    ntfy_token: str = _first("NTFY_TOKEN")
 
     sample_rate: int = 16000
     # Which microphone to use. "auto" prefers the computer's own mic over
