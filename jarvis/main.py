@@ -149,7 +149,20 @@ class Jarvis:
         current = lambda: self._current(job)  # noqa: E731
         started = time.monotonic()
         seconds = len(audio) / config.sample_rate
-        log(f"Got {seconds:.1f}s of audio, transcribing...")
+        # How loud the recording actually was. Near-zero means the microphone
+        # gave us silence, almost always a permission or input-device problem
+        # rather than unclear speech.
+        import numpy as np
+
+        peak = float(np.abs(audio).max()) if len(audio) else 0.0
+        log(f"Got {seconds:.1f}s of audio (peak {peak:.3f}), transcribing...")
+        if seconds >= 0.3 and peak < 0.01:
+            log("The microphone gave silence. Is Jarvis allowed to use it?")
+            self.hud.error(
+                "I can't hear your microphone. Allow Jarvis under System "
+                "Settings > Privacy & Security > Microphone, then quit and reopen Jarvis."
+            )
+            return
         vocabulary = str(prefs.get("vocabulary") or "")
         text = self.transcriber.transcribe(audio, vocabulary)
         if not current():

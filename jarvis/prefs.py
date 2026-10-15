@@ -16,6 +16,7 @@ EDITABLE = {
     "speak_replies": lambda: config.speak_replies,
     "clean_dictation": lambda: config.clean_dictation,
     "vocabulary": lambda: config.vocabulary,
+    "my_number": lambda: config.my_number,
 }
 
 _lock = threading.Lock()

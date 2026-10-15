@@ -94,6 +94,10 @@
     border-radius: 50%; background: #fff; transition: transform .2s; }
   .switch input:checked + span { background: var(--amber); }
   .switch input:checked + span::after { transform: translateX(16px); }
+  .setup-card input, textarea#vocabulary, #my-number { }
+  input#my-number { width: 100%; margin-top: 8px; font: inherit; font-size: 13px; color: var(--text);
+    background: rgba(255,255,255,.06); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+  input#my-number:focus { outline: 2px solid rgba(255,181,71,.5); outline-offset: 1px; }
   textarea { width: 100%; margin-top: 8px; resize: vertical; font: inherit; font-size: 13px; color: var(--text);
     background: rgba(255,255,255,.06); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
   textarea:focus, select:focus { outline: 2px solid rgba(255,181,71,.5); outline-offset: 1px; }
@@ -200,6 +204,13 @@
           <label for="vocabulary">Dictionary</label>
           <small>Names and words Jarvis should hear and spell right, separated by commas. You can also say "add Kai to my dictionary".</small>
           <textarea id="vocabulary" rows="3" placeholder="e.g. Kai, Brokering, Kosha, PyObjC"></textarea>
+        </div>
+      </div>
+      <div class="group">
+        <div class="row" style="display:block">
+          <label for="my-number">Your phone number</label>
+          <small>So Jarvis can text and call you (say "text me ..." or "call me"). On a Mac it uses your own iMessage and FaceTime.</small>
+          <input type="tel" id="my-number" autocomplete="off" placeholder="+1 555 123 4567">
         </div>
       </div>
       <div class="group" id="phone-setup" hidden>
@@ -337,6 +348,7 @@
     speakEl.checked = !!s.speak_replies;
     cleanEl.checked = !!s.clean_dictation;
     $("vocabulary").value = s.vocabulary || "";
+    if ($("my-number")) $("my-number").value = s.my_number || "";
     if (evt.info.engine === "android") $("phone-setup").hidden = false;
     $("info").innerHTML =
       `AI: <code>${evt.info.provider}</code> · <code>${evt.info.model}</code><br>` +
@@ -350,6 +362,7 @@
   speakEl.addEventListener("change", () => post({ type: "set", key: "speak_replies", value: speakEl.checked }));
   cleanEl.addEventListener("change", () => post({ type: "set", key: "clean_dictation", value: cleanEl.checked }));
   $("vocabulary").addEventListener("change", () => post({ type: "set", key: "vocabulary", value: $("vocabulary").value.trim() }));
+  $("my-number") && $("my-number").addEventListener("change", () => post({ type: "set", key: "my_number", value: $("my-number").value.trim() }));
   $("test-voice").addEventListener("click", () => post({ type: "test_voice" }));
   $("btn-accessibility") && $("btn-accessibility").addEventListener("click", () => post({ type: "open_accessibility" }));
   $("btn-overlay") && $("btn-overlay").addEventListener("click", () => post({ type: "open_overlay" }));

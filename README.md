@@ -142,6 +142,22 @@ On a Mac, Jarvis uses the Calendar and Reminders apps, so any account you've add
 
 Repeating events may not show up when Jarvis checks your calendar, because of a limit in how Calendar answers these requests.
 
+## Texting and calling you
+
+Jarvis can send you a text or ring your phone when you ask ("text me the address", "call me in five minutes", "text me when it's done"). Put your number in the app's settings (the gear) under **Your phone number**, or set `JARVIS_MY_NUMBER` in `.env`.
+
+On a Mac this uses **your own** iMessage and FaceTime: a text comes from you, and a call is a FaceTime audio call placed from your Mac to your number, so it rings your phone. Jarvis doesn't get its own number this way. The first time it texts, macOS asks to let Jarvis control Messages — allow it in System Settings > Privacy & Security > Automation.
+
+For Jarvis to have its own separate number that can SMS and call any phone (not just through your Apple ID), set up a free [Twilio](https://www.twilio.com) trial: buy a number, then add to `.env`:
+
+```
+TWILIO_SID=ACxxxxxxxx
+TWILIO_TOKEN=your-auth-token
+TWILIO_FROM=+1your-twilio-number
+```
+
+Jarvis then texts and calls through that number. Twilio charges a small amount per message and per minute.
+
 ## Email
 
 Jarvis can read your inbox and write emails for you. It never sends anything itself: it opens a filled-in draft in your mail app, and you press Send. Try "check my email", "read the one from Sam", or "reply to Sam saying I'll be there at 6".
@@ -253,6 +269,7 @@ Command mode's abilities live in `jarvis/tools.py`. To add one, put a new entry 
 | `jarvis/screen.py` | Screenshots, the coordinate grid, mouse and keyboard for screen control |
 | `jarvis/mail.py` | Reading email and opening drafts |
 | `jarvis/macapps.py` | Calendar and Reminders (Mac) |
+| `jarvis/contact.py` | Texting and calling you (iMessage/FaceTime, or Twilio) |
 | `jarvis/devices.py` | TVs, speakers, Home Assistant and Alexa |
 | `jarvis/setup.py` | First-run setup in the Mac app |
 | `packaging/` | Building Jarvis.app and Jarvis.dmg |

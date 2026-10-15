@@ -280,6 +280,24 @@ HOME_ASSISTANT_TOOLS = [
     },
 ]
 
+CONTACT_TOOLS = [
+    {
+        "name": "text_me",
+        "description": "Send the user a text message (to their own phone).",
+        "strict": True,
+        "input_schema": _schema({"message": {"type": "string"}}, ["message"]),
+    },
+    {
+        "name": "call_me",
+        "description": (
+            "Call the user's phone. On a Mac this is a FaceTime audio call; give a short "
+            "reason to say (used only if calling through a phone service)."
+        ),
+        "strict": True,
+        "input_schema": _schema({"reason": {"type": "string"}}, ["reason"]),
+    },
+]
+
 # Claude's web search runs on Anthropic's servers, so only Claude gets it.
 WEB_SEARCH_TOOL = {"type": "web_search_20260209", "name": "web_search", "max_uses": 3}
 
@@ -293,6 +311,10 @@ def command_tools(can_see_screen: bool = True) -> list[dict]:
         tools += EMAIL_TOOLS
     if config.is_mac:
         tools += CALENDAR_TOOLS
+    from . import contact
+
+    if contact.configured():
+        tools += CONTACT_TOOLS
     if config.devices:
         tools += DEVICE_TOOLS
     from . import devices
@@ -398,6 +420,14 @@ def run_tool(name: str, args: dict) -> str:
         if name == "control_device":
             return devices.control(device, args["action"], args["level"])
         return devices.open_app(device, args["app"], args["search"])
+    if name == "text_me":
+        from . import contact
+
+        return contact.text_me(args["message"])
+    if name == "call_me":
+        from . import contact
+
+        return contact.call_me(args["reason"])
     if name == "check_calendar":
         from . import macapps
 

@@ -135,6 +135,13 @@ class Config:
     home_assistant_url: str = os.environ.get("HOME_ASSISTANT_URL", "")
     home_assistant_token: str = os.environ.get("HOME_ASSISTANT_TOKEN", "")
 
+    # So Jarvis can text and call you. On a Mac it uses your own iMessage and
+    # FaceTime; Twilio (below) gives it a real separate number instead.
+    my_number: str = os.environ.get("JARVIS_MY_NUMBER", "")
+    twilio_sid: str = os.environ.get("TWILIO_SID", "")
+    twilio_token: str = os.environ.get("TWILIO_TOKEN", "")
+    twilio_from: str = os.environ.get("TWILIO_FROM", "")
+
     sample_rate: int = 16000
 
     # On a Mac, hold a key to talk and let go to send. Choose from fn,
