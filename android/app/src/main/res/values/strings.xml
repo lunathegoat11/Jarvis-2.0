@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Jarvis</string>
+    <string name="accessibility_description">Lets Jarvis open apps, tap and read the screen when you ask it to. Jarvis only acts when you speak to it.</string>
+</resources>

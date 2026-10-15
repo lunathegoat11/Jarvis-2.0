@@ -5,3 +5,10 @@ __pycache__/
 .pytest_cache/
 packaging/build/
 packaging/dist/
+
+# Android build output
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/

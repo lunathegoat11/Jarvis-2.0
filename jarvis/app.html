@@ -202,6 +202,10 @@
           <textarea id="vocabulary" rows="3" placeholder="e.g. Kai, Brokering, Kosha, PyObjC"></textarea>
         </div>
       </div>
+      <div class="group" id="phone-setup" hidden>
+        <div class="row"><div><label>Control the phone</label><small>Let Jarvis open apps and tap for you</small></div><button class="btn" id="btn-accessibility">Turn on</button></div>
+        <div class="row"><div><label>Floating bubble</label><small>A Jarvis button over other apps</small></div><button class="btn" id="btn-overlay">Allow</button></div>
+      </div>
       <div class="info" id="info"></div>
     </div>
   </section>
@@ -209,8 +213,12 @@
 <script>
 (() => {
   // ---- bridge to Python -----------------------------------------------------
+  // The Mac app listens through WebKit; the Android app injects JarvisAndroid.
   const post = (msg) => {
-    try { window.webkit.messageHandlers.jarvis.postMessage(JSON.stringify(msg)); } catch (e) {}
+    try {
+      if (window.JarvisAndroid) window.JarvisAndroid.post(JSON.stringify(msg));
+      else window.webkit.messageHandlers.jarvis.postMessage(JSON.stringify(msg));
+    } catch (e) {}
   };
 
   const $ = (id) => document.getElementById(id);
@@ -230,6 +238,8 @@
     document.body.dataset.state = next;
     statusEl.innerHTML = label || STATUS[next] || "";
   }
+  // On a phone there's no key to hold: tap the orb to talk, tap again to stop.
+  document.getElementById("orb").addEventListener("click", () => post({ type: "talk" }));
 
   function addItem(kind, who, text) {
     const item = document.createElement("div");
@@ -257,6 +267,7 @@
     receive(evt) {
       switch (evt.type) {
         case "init":
+          if (evt.info.hint) { STATUS.idle = evt.info.hint; if (state === "idle") setState("idle"); }
           applySettings(evt);
           if (evt.info.setup !== undefined) showSetup(evt.info.setup);
           break;
@@ -326,6 +337,7 @@
     speakEl.checked = !!s.speak_replies;
     cleanEl.checked = !!s.clean_dictation;
     $("vocabulary").value = s.vocabulary || "";
+    if (evt.info.engine === "android") $("phone-setup").hidden = false;
     $("info").innerHTML =
       `AI: <code>${evt.info.provider}</code> · <code>${evt.info.model}</code><br>` +
       `Screen: <code>${evt.info.vision_model}</code><br>` +
@@ -339,6 +351,8 @@
   cleanEl.addEventListener("change", () => post({ type: "set", key: "clean_dictation", value: cleanEl.checked }));
   $("vocabulary").addEventListener("change", () => post({ type: "set", key: "vocabulary", value: $("vocabulary").value.trim() }));
   $("test-voice").addEventListener("click", () => post({ type: "test_voice" }));
+  $("btn-accessibility") && $("btn-accessibility").addEventListener("click", () => post({ type: "open_accessibility" }));
+  $("btn-overlay") && $("btn-overlay").addEventListener("click", () => post({ type: "open_overlay" }));
   $("open-settings").addEventListener("click", () => $("drawer").classList.add("open"));
   $("close-settings").addEventListener("click", () => $("drawer").classList.remove("open"));
   $("clear").addEventListener("click", () => { feed.innerHTML = ""; document.body.classList.remove("active"); });
