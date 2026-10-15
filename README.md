@@ -15,18 +15,37 @@ A quick tap of right Option is ignored, and so is a hold where you press another
 
 If you'd rather have a separate key for each mode (fn to dictate, right Command to ask, right Option for commands), set `JARVIS_ONE_KEY=0`.
 
-## Download the Mac app
+## Download the apps
 
-You don't need Terminal or Python to use Jarvis. The Mac app is built by GitHub:
+You don't need Terminal or Python to use Jarvis. GitHub builds the Mac app (`Jarvis.dmg`) and the Android app (`Jarvis.apk`) for you. Open the repository's **Actions** tab, pick **Build Mac app** or **Build Android app**, press **Run workflow**, wait for it to finish (the green tick), then open the run and download the file at the bottom. Pushing a tag like `v2.0.1` builds both and attaches them to a release.
 
-1. On the repository page, open **Actions → Build Mac app → Run workflow**. It takes about 15 minutes. (Pushing a tag like `v2.0.1` also builds it and attaches it to a release.)
-2. Open the finished run and download **Jarvis-mac** at the bottom. Unzip it to get `Jarvis.dmg`.
-3. Open the .dmg and drag Jarvis into Applications.
-4. The first time, macOS says it can't check the app for malware, because it isn't signed with a paid Apple Developer certificate. Open **System Settings → Privacy & Security**, scroll down, and click **Open Anyway** next to Jarvis.
-5. Jarvis asks which AI to use and for your key. Each person who installs it uses their own key, saved only on their Mac in `~/.jarvis/.env`.
-6. Give **Jarvis** (not Terminal) access to the Microphone, Accessibility, Input Monitoring and Screen Recording in Privacy & Security.
+Everyone who installs Jarvis uses their own AI key. The first time the app opens, it asks which AI to use and for the key, and saves it only on that device.
 
-To share it, send people the .dmg file. The repository is private, so others can't download it from GitHub themselves. The app writes what it's doing to `~/.jarvis/jarvis.log`, which is the place to look if something goes wrong.
+### Android
+
+1. Download **Jarvis-android** from the build and unzip it to get `Jarvis.apk`.
+2. Copy it to the phone (email it to yourself, or use a USB cable or Google Drive) and tap it. Android asks you to allow installing apps from this source; say yes. It's "unknown" only because it didn't come from the Play Store.
+3. Open Jarvis, pick your AI and paste your key.
+4. **Tap the orb to talk.** Tap it again to stop.
+5. For Jarvis to open apps and tap for you, open settings (the gear) and turn on **Control the phone**; Android takes you to Accessibility, where you switch Jarvis on. **Floating bubble** puts a Jarvis button over your other apps.
+
+The Android app is close to full control: with the accessibility permission it can open apps, read the screen, tap, type and swipe, so it can carry out things like "play the latest MrBeast video" step by step.
+
+### iPhone
+
+Apple doesn't allow this. iPhones can only install apps from the App Store (or TestFlight, which needs a paid Apple Developer account), there's no way to "download a file that becomes an app", and no app is allowed to control the rest of the phone or draw in the Dynamic Island the way this needs. So there's no iPhone version. On an iPhone you can still use Jarvis through the Mac, or reach it from any browser if you later host it yourself.
+
+### Mac
+
+The Mac app is built by GitHub:
+
+1. Download **Jarvis-mac** from the build and unzip it to get `Jarvis.dmg`.
+2. Open the .dmg and drag Jarvis into Applications.
+3. The first time, macOS says it can't check the app for malware, because it isn't signed with a paid Apple Developer certificate. Open **System Settings → Privacy & Security**, scroll down, and click **Open Anyway** next to Jarvis.
+4. Jarvis asks which AI to use and for your key, saved only on that Mac in `~/.jarvis/.env`.
+5. Give **Jarvis** (not Terminal) access to the Microphone, Accessibility, Input Monitoring and Screen Recording in Privacy & Security.
+
+To share either app, send people the file. The repository is private, so others can't download it from GitHub themselves. The Mac app writes what it's doing to `~/.jarvis/jarvis.log`, which is the place to look if something goes wrong.
 
 ## TVs, speakers and the smart home
 

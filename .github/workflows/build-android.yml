@@ -24,11 +24,14 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - uses: android-actions/setup-android@v3
+      - name: Accept Android SDK licenses
+        # The runner already ships the SDK; just agree to the licenses so
+        # Gradle can use the installed build-tools and platform.
+        run: yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true
 
       - name: Build the APK
         working-directory: android
-        run: ./gradlew assembleRelease --no-daemon
+        run: ./gradlew assembleRelease --no-daemon --stacktrace
 
       - name: Name it Jarvis.apk
         run: cp android/app/build/outputs/apk/release/app-release.apk Jarvis.apk
