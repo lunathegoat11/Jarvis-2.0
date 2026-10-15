@@ -99,7 +99,8 @@ class Brain(private val settings: Settings, private val device: DeviceActions) {
         body.put("messages", messages)
         body.put("tools", Tools.openAi())
         if (settings.provider == "nvidia") {
-            body.put("extra_body", JSONObject())  // ignored by server; placeholder
+            // Turn off the model's silent thinking, which otherwise uses up the reply.
+            body.put("chat_template_kwargs", JSONObject().put("enable_thinking", false))
         }
 
         val response = postJson("${settings.baseUrl()}/chat/completions", body, bearer = settings.apiKey)

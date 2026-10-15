@@ -100,6 +100,4 @@ class BubbleService : Service() {
             return true
         }
     }
-
-
-
+}

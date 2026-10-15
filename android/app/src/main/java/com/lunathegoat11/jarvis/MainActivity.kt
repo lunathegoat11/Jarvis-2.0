@@ -10,15 +10,13 @@ import android.speech.SpeechRecognizer
 import android.speech.RecognitionListener
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
-import androidx.activity.ComponentActivity
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
+import android.app.Activity
 import org.json.JSONArray
 import org.json.JSONObject
 import kotlin.concurrent.thread
 
 /** The Jarvis phone app: the orb page, listening, the AI, and speaking back. */
-class MainActivity : ComponentActivity() {
+class MainActivity : Activity() {
 
     private lateinit var web: WebView
     private lateinit var settings: Settings
@@ -40,7 +38,7 @@ class MainActivity : ComponentActivity() {
         web.loadUrl("file:///android_asset/app.html")
         setContentView(web)
 
-        ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), 1)
+        requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 1)
     }
 
     override fun onDestroy() {
@@ -141,10 +139,10 @@ class MainActivity : ComponentActivity() {
     // ---- listening and answering ---------------------------------------------
 
     private fun startListening() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO)
             != PackageManager.PERMISSION_GRANTED
         ) {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), 1)
+            requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 1)
             return
         }
         if (!settings.configured) {
