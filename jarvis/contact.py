@@ -146,6 +146,8 @@ TWILIO_HINTS = {
     21608: "A Twilio trial account can only text and call verified numbers. Verify your "
     "number in the Twilio Console under Phone Numbers > Verified Caller IDs.",
     21659: "TWILIO_FROM isn't a number on your Twilio account.",
+    572006: "Twilio trial accounts can only send Twilio's ready-made sample texts, not "
+    "your own words. Upgrade the Twilio account (add a payment method) to send real texts.",
 }
 
 
