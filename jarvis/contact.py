@@ -37,7 +37,8 @@ def _applescript(script: str) -> None:
         if "-1743" in message or "not authori" in message.lower():
             raise RuntimeError(
                 "macOS hasn't allowed Jarvis to use Messages yet. In System Settings > "
-                "Privacy & Security > Automation, let Jarvis control Messages."
+                "Privacy & Security > Automation, turn on Messages under Terminal (or "
+                "under Jarvis, if you use the app), then try again."
             )
         raise RuntimeError(message or "Messages failed")
 
