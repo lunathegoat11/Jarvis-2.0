@@ -63,7 +63,8 @@ task needs looking at the screen and clicking \
 (finding and playing a particular video, working through a website or app), \
 use use_screen with the whole task. Use several tools in a row when a request \
 needs it. If a request is unclear or no tool can do it, say so rather than \
-guessing."""
+guessing. When a tool fails, tell the user what its error said, since it \
+usually explains how to fix it."""
 
 WEB_SEARCH_HINT = " Search the web when a question needs current information."
 
@@ -126,6 +127,8 @@ def _run_tool_safely(name: str, args: dict) -> tuple[str, bool]:
     try:
         return run_tool(name, args), False
     except Exception as error:
+        # Show the real error in the log; the model's reply only paraphrases it.
+        print(f"[{time.strftime('%H:%M:%S')}] {name} failed: {error}", flush=True)
         return f"Failed: {error}", True
 
 
