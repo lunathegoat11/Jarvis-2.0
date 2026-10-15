@@ -7,6 +7,7 @@ import traceback
 from . import desktop, prefs, quick, router, voice
 from .audio import Recorder, Transcriber
 from .brain import make_brain
+from . import config as settings
 from .config import config
 from .hotkeys import start_listener
 from .hud import make_hud, reply_seconds
@@ -260,7 +261,18 @@ class Jarvis:
 
 def main() -> None:
     try:
-        Jarvis().run()
+        jarvis = Jarvis()
+    except SystemExit as problem:
+        # The downloadable app has no terminal to show this in, so it opens a
+        # setup screen instead (missing or wrong key, unknown provider, ...).
+        if config.is_mac and settings.IS_APP:
+            from .setup import run_setup_window
+
+            run_setup_window(str(problem))
+            return
+        raise
+    try:
+        jarvis.run()
     except KeyboardInterrupt:
         pass
     print("\nBye.")

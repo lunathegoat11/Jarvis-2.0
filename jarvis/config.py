@@ -2,16 +2,27 @@
 
 import os
 import platform
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
 from dotenv import load_dotenv
 
-# The .env file next to the jarvis folder, wherever Jarvis is started from.
-ENV_FILE = Path(os.environ.get("JARVIS_ENV_FILE", Path(__file__).resolve().parent.parent / ".env"))
-load_dotenv(ENV_FILE)
-
 DATA_DIR = Path(os.environ.get("JARVIS_DATA_DIR", Path.home() / ".jarvis"))
+
+# Settings come from a .env file. Running from the source folder, that's the
+# .env next to the jarvis folder. The downloadable app keeps its settings in
+# ~/.jarvis/.env instead, which its setup screen writes.
+REPO_ENV = Path(__file__).resolve().parent.parent / ".env"
+USER_ENV = DATA_DIR / ".env"
+IS_APP = bool(getattr(sys, "frozen", False))
+if os.environ.get("JARVIS_ENV_FILE"):
+    ENV_FILE = Path(os.environ["JARVIS_ENV_FILE"])
+    load_dotenv(ENV_FILE)
+else:
+    ENV_FILE = REPO_ENV if REPO_ENV.exists() and not IS_APP else USER_ENV
+    load_dotenv(ENV_FILE)
+    load_dotenv(USER_ENV)  # app settings fill any gaps; never override
 
 # Ready-made settings for each AI provider. Every one apart from "anthropic"
 # speaks the OpenAI chat-completions format. "custom" covers any other
@@ -116,6 +127,13 @@ class Config:
 
     # Which calendar new events go in; empty means the first one you can edit.
     calendar_name: str = os.environ.get("JARVIS_CALENDAR", "")
+
+    # TVs and speakers on your Wi-Fi (Chromecast, Sonos, Roku). 0 turns it off.
+    devices: bool = os.environ.get("JARVIS_DEVICES", "1") == "1"
+    # Home Assistant: its address and a long-lived access token (made on your
+    # profile page in Home Assistant). Also how Jarvis reaches Alexa.
+    home_assistant_url: str = os.environ.get("HOME_ASSISTANT_URL", "")
+    home_assistant_token: str = os.environ.get("HOME_ASSISTANT_TOKEN", "")
 
     sample_rate: int = 16000
 

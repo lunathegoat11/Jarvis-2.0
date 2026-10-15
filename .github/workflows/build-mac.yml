@@ -1,0 +1,63 @@
+name: Build Mac app
+
+# Builds Jarvis.dmg on a GitHub Mac. Run it from the Actions tab ("Run
+# workflow"), or push a tag like v2.0.1 to also attach the .dmg to a release.
+# Mac build minutes count ten times against the free allowance, so this
+# doesn't run on every push.
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          # Kokoro (the voice) doesn't list 3.14 yet, so the app uses 3.13.
+          python-version: "3.13"
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt kokoro-onnx pyinstaller
+
+      - name: Run the tests
+        run: |
+          pip install pytest
+          python -m pytest -q
+
+      - name: Build Jarvis.app
+        working-directory: packaging
+        run: pyinstaller --noconfirm Jarvis.spec
+
+      - name: Check the app has everything it needs
+        run: packaging/dist/Jarvis.app/Contents/MacOS/Jarvis --selftest
+
+      - name: Sign (ad hoc) and make the disk image
+        run: |
+          codesign --force --deep --sign - packaging/dist/Jarvis.app
+          mkdir dmg
+          cp -R packaging/dist/Jarvis.app dmg/
+          ln -s /Applications dmg/Applications
+          hdiutil create -volname Jarvis -srcfolder dmg -ov -format UDZO Jarvis.dmg
+          ls -lh Jarvis.dmg
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Jarvis-mac
+          path: Jarvis.dmg
+          retention-days: 30
+
+      - name: Attach to a release (tags only)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: Jarvis.dmg

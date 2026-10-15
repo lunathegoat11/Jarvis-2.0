@@ -15,6 +15,42 @@ A quick tap of right Option is ignored, and so is a hold where you press another
 
 If you'd rather have a separate key for each mode (fn to dictate, right Command to ask, right Option for commands), set `JARVIS_ONE_KEY=0`.
 
+## Download the Mac app
+
+You don't need Terminal or Python to use Jarvis. The Mac app is built by GitHub:
+
+1. On the repository page, open **Actions → Build Mac app → Run workflow**. It takes about 15 minutes. (Pushing a tag like `v2.0.1` also builds it and attaches it to a release.)
+2. Open the finished run and download **Jarvis-mac** at the bottom. Unzip it to get `Jarvis.dmg`.
+3. Open the .dmg and drag Jarvis into Applications.
+4. The first time, macOS says it can't check the app for malware, because it isn't signed with a paid Apple Developer certificate. Open **System Settings → Privacy & Security**, scroll down, and click **Open Anyway** next to Jarvis.
+5. Jarvis asks which AI to use and for your key. Each person who installs it uses their own key, saved only on their Mac in `~/.jarvis/.env`.
+6. Give **Jarvis** (not Terminal) access to the Microphone, Accessibility, Input Monitoring and Screen Recording in Privacy & Security.
+
+To share it, send people the .dmg file. The repository is private, so others can't download it from GitHub themselves. The app writes what it's doing to `~/.jarvis/jarvis.log`, which is the place to look if something goes wrong.
+
+## TVs, speakers and the smart home
+
+Jarvis finds these on your Wi-Fi by itself:
+
+| Device | What Jarvis can do |
+| --- | --- |
+| Chromecast, Google TV, Nest speakers | Play, pause, skip, volume, mute, stop |
+| Sonos | Play, pause, skip, volume, mute (whole groups follow the main speaker) |
+| Roku TVs and sticks | All of the above with the remote's buttons, plus open apps ("open Netflix on the living room TV") and search ("find Stranger Things on the TV") |
+
+Say things like "pause the kitchen speaker", "turn the living room TV up" or "what speakers do I have?". Set `JARVIS_DEVICES=0` to turn this off.
+
+**Home Assistant** connects everything else: lights, plugs, thermostats, locks, Samsung and LG TVs, Apple TV, and Amazon Echo devices. If you use it, make a long-lived access token on your Home Assistant profile page and add:
+
+```
+HOME_ASSISTANT_URL=http://homeassistant.local:8123
+HOME_ASSISTANT_TOKEN=your-token
+```
+
+Jarvis then passes sentences like "turn off the bedroom lights" or "is the front door locked?" to Home Assistant's Assist.
+
+**Alexa:** Amazon doesn't let other apps control Echo devices directly. Install the **Alexa Media Player** integration in Home Assistant (through HACS) and Jarvis can control Echos through it and make them announce things ("tell the kitchen Echo dinner's ready").
+
 ## The notch
 
 On a Mac, Jarvis lives in the notch at the top of the screen. When you hold right Option, a black panel grows out of the notch with a live waveform of your voice. While Jarvis works, the waveform pulses, and a Liquid Glass card drops down underneath showing what it heard and then its reply. Everything slides back into the notch once Jarvis has finished speaking.
@@ -198,6 +234,9 @@ Command mode's abilities live in `jarvis/tools.py`. To add one, put a new entry 
 | `jarvis/screen.py` | Screenshots, the coordinate grid, mouse and keyboard for screen control |
 | `jarvis/mail.py` | Reading email and opening drafts |
 | `jarvis/macapps.py` | Calendar and Reminders (Mac) |
+| `jarvis/devices.py` | TVs, speakers, Home Assistant and Alexa |
+| `jarvis/setup.py` | First-run setup in the Mac app |
+| `packaging/` | Building Jarvis.app and Jarvis.dmg |
 | `jarvis/voice.py` | Jarvis's speaking voice, and stripping symbols from what it says |
 | `jarvis/app.py`, `jarvis/app.html` | The Jarvis app window, orb and settings |
 | `jarvis/prefs.py` | Settings changed in the app |

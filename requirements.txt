@@ -10,5 +10,7 @@ pillow>=10.0
 pyttsx3>=2.90; sys_platform != "darwin"
 plyer>=2.1
 python-dotenv>=1.0
+pychromecast>=14.0
+soco>=0.30
 pyobjc-framework-Cocoa>=11.0; sys_platform == "darwin"
 pyobjc-framework-WebKit>=11.0; sys_platform == "darwin"

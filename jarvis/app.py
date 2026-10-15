@@ -159,6 +159,18 @@ class JarvisApp:
             for event in self.pending:
                 self.send(event)
             self.pending.clear()
+        elif kind == "setup":
+            from . import setup
+
+            try:
+                setup.write_settings(
+                    message.get("provider", ""), message.get("key", ""), message.get("model", "")
+                )
+            except ValueError as error:
+                self.send({"type": "setup_error", "text": str(error)})
+                return
+            self.send({"type": "setup_done"})
+            setup.relaunch()
         elif kind == "set":
             prefs.set(message["key"], message["value"])
             if message["key"] == "voice":

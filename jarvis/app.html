@@ -97,6 +97,21 @@
   textarea { width: 100%; margin-top: 8px; resize: vertical; font: inherit; font-size: 13px; color: var(--text);
     background: rgba(255,255,255,.06); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
   textarea:focus, select:focus { outline: 2px solid rgba(255,181,71,.5); outline-offset: 1px; }
+  .setup { position: absolute; inset: 0; z-index: 10; display: grid; place-items: center; padding: 20px;
+    background: rgba(4, 6, 10, .86); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
+  .setup[hidden] { display: none; }
+  .setup-card { width: 100%; max-width: 360px; display: flex; flex-direction: column; gap: 8px; }
+  .setup-card h1 { font-size: 22px; margin: 0 0 4px; font-weight: 650; }
+  .setup-card label { font-size: 12.5px; color: var(--muted); margin-top: 8px; display: block; }
+  .setup-card select, .setup-card input { width: 100%; max-width: none; font: inherit; font-size: 14px;
+    color: var(--text); background: rgba(255,255,255,.06); border: 1px solid var(--line); border-radius: 9px; padding: 9px 11px; margin-top: 4px; }
+  .setup-card input:focus { outline: 2px solid rgba(255,181,71,.5); outline-offset: 1px; }
+  .muted { color: var(--muted); margin: 0; }
+  .small { font-size: 12px; }
+  .error { color: var(--danger); min-height: 1em; margin: 4px 0 0; font-size: 12.5px; }
+  .btn.primary { background: var(--amber); color: #1a1205; border-color: transparent; font-weight: 600; padding: 10px; margin-top: 6px; }
+  .btn.primary:hover { background: #ffc46b; }
+  .setup a { color: var(--amber); }
   .info { color: var(--muted); font-size: 12px; padding: 4px 4px 0; }
   .info code { color: var(--text); font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; }
 </style>
@@ -119,6 +134,31 @@
     </div>
     <div class="feed" id="feed"></div>
   </main>
+
+  <section class="setup" id="setup" aria-label="Set up Jarvis" hidden>
+    <div class="setup-card">
+      <h1>Set up Jarvis</h1>
+      <p class="muted" id="setup-problem"></p>
+      <label for="setup-provider">AI provider</label>
+      <select id="setup-provider">
+        <option value="nvidia">NVIDIA (free credits)</option>
+        <option value="anthropic">Claude by Anthropic (paid, most capable)</option>
+        <option value="ollama">Ollama (free, runs on this Mac)</option>
+      </select>
+      <p class="muted small" id="setup-help"></p>
+      <div id="setup-key-row">
+        <label for="setup-key">API key</label>
+        <input type="password" id="setup-key" autocomplete="off" spellcheck="false" placeholder="Paste your key">
+      </div>
+      <div id="setup-model-row" hidden>
+        <label for="setup-model">Model</label>
+        <input type="text" id="setup-model" autocomplete="off" spellcheck="false" placeholder="e.g. gemma4:12b">
+      </div>
+      <p class="error" id="setup-error" role="alert"></p>
+      <button class="btn primary" id="setup-save">Save and start Jarvis</button>
+      <p class="muted small">Your key is saved only on this Mac, in ~/.jarvis/.env.</p>
+    </div>
+  </section>
 
   <section class="drawer" id="drawer" aria-label="Settings">
     <header>
@@ -216,7 +256,12 @@
   window.jarvis = {
     receive(evt) {
       switch (evt.type) {
-        case "init": applySettings(evt); break;
+        case "init":
+          applySettings(evt);
+          if (evt.info.setup !== undefined) showSetup(evt.info.setup);
+          break;
+        case "setup_error": $("setup-error").textContent = evt.text; $("setup-save").disabled = false; break;
+        case "setup_done": $("setup-save").textContent = "Starting Jarvis…"; break;
         case "state":
           setState(evt.state, evt.label);
           // Keep the big orb until there's something to show in the feed.
@@ -230,6 +275,30 @@
       }
     },
   };
+
+  // ---- first-run setup ------------------------------------------------------
+  const HELP = {
+    nvidia: 'Get a free key at build.nvidia.com: open any model and click "Get API Key". It starts with nvapi-.',
+    anthropic: "Get a key at console.anthropic.com. Claude is billed per use, so set a monthly limit there.",
+    ollama: "Install Ollama from ollama.com, download a model, then type its name exactly as `ollama list` shows it.",
+  };
+  function showSetupFields() {
+    const p = $("setup-provider").value;
+    $("setup-help").textContent = HELP[p];
+    $("setup-key-row").hidden = p === "ollama";
+    $("setup-model-row").hidden = p !== "ollama";
+  }
+  function showSetup(problem) {
+    $("setup-problem").textContent = problem || "Choose the AI that powers Jarvis.";
+    $("setup").hidden = false;
+    showSetupFields();
+  }
+  $("setup-provider").addEventListener("change", showSetupFields);
+  $("setup-save").addEventListener("click", () => {
+    $("setup-error").textContent = "";
+    $("setup-save").disabled = true;
+    post({ type: "setup", provider: $("setup-provider").value, key: $("setup-key").value, model: $("setup-model").value });
+  });
 
   // ---- settings -------------------------------------------------------------
   const voiceEl = $("voice"), speedEl = $("speed"), speakEl = $("speak"), cleanEl = $("clean");

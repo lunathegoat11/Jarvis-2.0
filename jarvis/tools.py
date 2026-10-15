@@ -209,6 +209,77 @@ CALENDAR_TOOLS = [
     },
 ]
 
+DEVICE_TOOLS = [
+    {
+        "name": "list_devices",
+        "description": (
+            "List the TVs and speakers on the user's Wi-Fi (Chromecast / Google TV, Sonos, "
+            "Roku) and say whether Home Assistant is connected."
+        ),
+        "strict": True,
+        "input_schema": _schema({}, []),
+    },
+    {
+        "name": "control_device",
+        "description": (
+            "Control a TV or speaker by name, e.g. 'living room TV' or 'kitchen'. level is "
+            "0-100 and only used by set_volume (send 0 otherwise)."
+        ),
+        "strict": True,
+        "input_schema": _schema(
+            {
+                "device": {"type": "string"},
+                "action": {
+                    "type": "string",
+                    "enum": [
+                        "play", "pause", "stop", "next", "previous", "volume_up", "volume_down",
+                        "set_volume", "mute", "unmute", "power_on", "power_off", "home", "back",
+                    ],
+                },
+                "level": {"type": "integer"},
+            },
+            ["device", "action", "level"],
+        ),
+    },
+    {
+        "name": "tv_open_app",
+        "description": (
+            "On a Roku TV: open a streaming app (YouTube, Netflix, Hulu, Disney+, Prime Video, "
+            "Spotify, Max, Plex...), or search for a show or film when search is given "
+            "(otherwise send an empty search)."
+        ),
+        "strict": True,
+        "input_schema": _schema(
+            {"device": {"type": "string"}, "app": {"type": "string"}, "search": {"type": "string"}},
+            ["device", "app", "search"],
+        ),
+    },
+]
+
+HOME_ASSISTANT_TOOLS = [
+    {
+        "name": "smart_home",
+        "description": (
+            "Control the smart home through Home Assistant with a plain sentence, e.g. 'turn "
+            "off the bedroom lights', 'set the thermostat to 21', 'is the front door locked', "
+            "'turn on the living room TV'. Also covers Alexa devices connected to it."
+        ),
+        "strict": True,
+        "input_schema": _schema({"command": {"type": "string"}}, ["command"]),
+    },
+    {
+        "name": "alexa_announce",
+        "description": (
+            "Make an Amazon Echo say something out loud. device is the Echo's name, or an "
+            "empty string for all of them."
+        ),
+        "strict": True,
+        "input_schema": _schema(
+            {"message": {"type": "string"}, "device": {"type": "string"}}, ["message", "device"]
+        ),
+    },
+]
+
 # Claude's web search runs on Anthropic's servers, so only Claude gets it.
 WEB_SEARCH_TOOL = {"type": "web_search_20260209", "name": "web_search", "max_uses": 3}
 
@@ -222,6 +293,12 @@ def command_tools(can_see_screen: bool = True) -> list[dict]:
         tools += EMAIL_TOOLS
     if config.is_mac:
         tools += CALENDAR_TOOLS
+    if config.devices:
+        tools += DEVICE_TOOLS
+    from . import devices
+
+    if devices.home_assistant_configured():
+        tools += HOME_ASSISTANT_TOOLS
     if can_see_screen:
         tools += [LOOK_AT_SCREEN_TOOL, USE_SCREEN_TOOL]
     return tools
@@ -308,6 +385,19 @@ def run_tool(name: str, args: dict) -> str:
 
         mail.draft(args["to"], args["subject"], args["body"])
         return "The draft is open in the mail app for the user to check and send."
+    if name in ("list_devices", "control_device", "tv_open_app", "smart_home", "alexa_announce"):
+        from . import devices
+
+        if name == "list_devices":
+            return devices.summary(devices.discover(refresh=True))
+        if name == "smart_home":
+            return devices.home_command(args["command"])
+        if name == "alexa_announce":
+            return devices.alexa_announce(args["message"], args["device"])
+        device = devices.find(args["device"], devices.discover())
+        if name == "control_device":
+            return devices.control(device, args["action"], args["level"])
+        return devices.open_app(device, args["app"], args["search"])
     if name == "check_calendar":
         from . import macapps
 
