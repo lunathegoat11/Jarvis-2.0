@@ -7,12 +7,33 @@ import numpy as np
 from .config import config
 
 
+def pick_device(devices, choice: str):
+    """The index of the microphone to record from, or None for the system's.
+
+    "auto" prefers the computer's own mic, because AirPods and other Bluetooth
+    headsets often hand over silence (in the case, connected to a phone) and
+    drop to call-quality sound while their mic is in use. Any other word picks
+    the first input whose name contains it, e.g. "airpods" or "yeti".
+    """
+    choice = (choice or "").strip().lower()
+    if choice in ("", "default", "system"):
+        return None
+    wanted = ["macbook", "built-in"] if choice == "auto" else [choice]
+    inputs = [(i, d) for i, d in enumerate(devices) if d["max_input_channels"] > 0]
+    for word in wanted:
+        for index, device in inputs:
+            if word in device["name"].lower():
+                return index
+    return None
+
+
 class Recorder:
-    """Records from the default microphone between start() and stop()."""
+    """Records from the microphone between start() and stop()."""
 
     def __init__(self):
         self._chunks: list[np.ndarray] = []
         self._stream = None
+        self._rate = config.sample_rate
         self._lock = threading.Lock()
         # Loudness of the latest audio chunk, 0 to 1, for the notch waveform.
         self.level = 0.0
@@ -25,13 +46,49 @@ class Recorder:
         import sounddevice as sd
 
         self._chunks = []
-        self._stream = sd.InputStream(
-            samplerate=config.sample_rate,
-            channels=1,
-            dtype="float32",
-            callback=self._on_audio,
-        )
-        self._stream.start()
+        try:
+            self._open(sd, pick_device(sd.query_devices(), config.mic))
+        except sd.PortAudioError:
+            # The device list is read once, so it goes stale when inputs change
+            # (AirPods connecting, another mic picked in Settings). Re-read it
+            # and try again, then fall back to whatever the system is using.
+            sd._terminate()
+            sd._initialize()
+            try:
+                self._open(sd, pick_device(sd.query_devices(), config.mic))
+            except sd.PortAudioError:
+                self._open(sd, None)
+
+    def _open(self, sd, device) -> None:
+        # Whisper wants 16 kHz, but some mics (Bluetooth ones especially)
+        # refuse it, so fall back to the mic's own rate and convert in stop().
+        rates = [config.sample_rate]
+        try:
+            native = int(sd.query_devices(device, "input")["default_samplerate"])
+            if native not in rates:
+                rates.append(native)
+        except Exception:
+            pass
+        error = None
+        for rate in rates:
+            stream = None
+            try:
+                stream = sd.InputStream(
+                    device=device,
+                    samplerate=rate,
+                    channels=1,
+                    dtype="float32",
+                    callback=self._on_audio,
+                )
+                stream.start()
+            except sd.PortAudioError as problem:
+                error = problem
+                if stream is not None:
+                    stream.close()
+                continue
+            self._stream, self._rate = stream, rate
+            return
+        raise error
 
     def _on_audio(self, indata, frames, time, status) -> None:
         with self._lock:
@@ -49,7 +106,14 @@ class Recorder:
         with self._lock:
             if not self._chunks:
                 return np.zeros(0, dtype=np.float32)
-            return np.concatenate(self._chunks).flatten()
+            audio = np.concatenate(self._chunks).flatten()
+        if self._rate != config.sample_rate and audio.size:
+            # Convert to the 16 kHz Whisper expects.
+            length = int(round(audio.size * config.sample_rate / self._rate))
+            audio = np.interp(
+                np.linspace(0, audio.size - 1, length), np.arange(audio.size), audio
+            ).astype(np.float32)
+        return audio
 
 
 class Transcriber:

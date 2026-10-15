@@ -159,6 +159,10 @@ class Config:
     twilio_from: str = os.environ.get("TWILIO_FROM", "")
 
     sample_rate: int = 16000
+    # Which microphone to use. "auto" prefers the computer's own mic over
+    # AirPods and other headsets; "default" follows System Settings; any other
+    # word picks the mic whose name contains it, e.g. "airpods".
+    mic: str = os.environ.get("JARVIS_MIC", "auto")
 
     # On a Mac, hold a key to talk and let go to send. Choose from fn,
     # right_cmd, right_option, right_ctrl and right_shift.

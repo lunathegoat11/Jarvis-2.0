@@ -106,8 +106,16 @@ class Jarvis:
         # Talking over Jarvis stops whatever it was saying or doing.
         self.interrupt()
         log(f"Listening ({mode})...")
+        try:
+            self.recorder.start()
+        except Exception as problem:
+            log(f"Couldn't open the microphone: {problem}")
+            self.hud.error(
+                "I couldn't open the microphone. Check System Settings > Sound > Input, "
+                "then try again."
+            )
+            return
         self.mode = mode
-        self.recorder.start()
         self.hud.listening(mode)
 
     def stop(self, mode: str) -> None:
