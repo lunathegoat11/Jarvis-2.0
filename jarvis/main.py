@@ -42,17 +42,23 @@ def acquire_single_instance(wait_seconds: float = 3.0) -> bool:
     global _instance_lock
     try:
         import fcntl
+
+        config.data_dir.mkdir(parents=True, exist_ok=True)
+        # Open without truncating (another copy may be using this file), so
+        # the lock still works and startup never fails over the lock file.
+        lock_file = open(config.data_dir / "jarvis.lock", "a")
     except Exception:
-        return True  # no fcntl (e.g. Windows): don't block startup over the lock
-    config.data_dir.mkdir(parents=True, exist_ok=True)
-    _instance_lock = open(config.data_dir / "jarvis.lock", "w")
+        # No fcntl (Windows), or a read-only home: don't block startup.
+        return True
     deadline = time.monotonic() + wait_seconds
     while True:
         try:
-            fcntl.flock(_instance_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            _instance_lock = lock_file  # only on success, so losers leak nothing
             return True
         except OSError:
             if time.monotonic() >= deadline:
+                lock_file.close()
                 return False
             time.sleep(0.25)
 
