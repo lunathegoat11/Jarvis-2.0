@@ -346,7 +346,8 @@ class AnthropicBrain(Brain):
         super().__init__()
         if not (os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN")):
             raise SystemExit(
-                f"Jarvis is set to use Claude, but there's no ANTHROPIC_API_KEY in {settings.ENV_FILE}.\n"
+                f"Jarvis is set to use Claude, but there's no ANTHROPIC_API_KEY in {settings.ENV_FILE} "
+                f"or {settings.USER_ENV}.\n"
                 "To use Ollama instead, put JARVIS_PROVIDER=ollama and JARVIS_MODEL=<model> in that file."
             )
         self.client = anthropic.Anthropic()

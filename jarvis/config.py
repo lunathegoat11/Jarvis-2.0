@@ -6,13 +6,26 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from dotenv import load_dotenv
+from dotenv import dotenv_values, load_dotenv
 
 DATA_DIR = Path(os.environ.get("JARVIS_DATA_DIR", Path.home() / ".jarvis"))
 
 # Settings come from a .env file. Running from the source folder, that's the
 # .env next to the jarvis folder. The downloadable app keeps its settings in
 # ~/.jarvis/.env instead, which its setup screen writes.
+def fill_gaps_from(path: Path) -> None:
+    """Loads settings from path without overriding a real value. A blank one
+    like "ANTHROPIC_API_KEY=" (as in the template) counts as a gap, or it
+    would hide the key saved in ~/.jarvis/.env."""
+    try:
+        values = dotenv_values(path)
+    except OSError:
+        return
+    for name, value in values.items():
+        if value and not os.environ.get(name):
+            os.environ[name] = value
+
+
 REPO_ENV = Path(__file__).resolve().parent.parent / ".env"
 USER_ENV = DATA_DIR / ".env"
 IS_APP = bool(getattr(sys, "frozen", False))
@@ -22,7 +35,8 @@ if os.environ.get("JARVIS_ENV_FILE"):
 else:
     ENV_FILE = REPO_ENV if REPO_ENV.exists() and not IS_APP else USER_ENV
     load_dotenv(ENV_FILE)
-    load_dotenv(USER_ENV)  # app settings fill any gaps; never override
+    if USER_ENV != ENV_FILE:
+        fill_gaps_from(USER_ENV)
 
 # Ready-made settings for each AI provider. Every one apart from "anthropic"
 # speaks the OpenAI chat-completions format. "custom" covers any other

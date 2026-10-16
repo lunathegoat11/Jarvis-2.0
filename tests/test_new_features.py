@@ -74,3 +74,20 @@ def test_garbled_env_numbers_fall_back_instead_of_crashing(monkeypatch):
         for name in ("JARVIS_VOICE_SPEED", "JARVIS_SCREEN_WIDTH", "JARVIS_MAX_SCREEN_STEPS"):
             monkeypatch.delenv(name, raising=False)
         importlib.reload(config_module)
+
+
+def test_a_blank_key_in_the_project_env_doesnt_hide_the_saved_one(tmp_path, monkeypatch):
+    # The template's empty "ANTHROPIC_API_KEY=" in the project .env used to
+    # win over the real key in ~/.jarvis/.env.
+    from jarvis.config import fill_gaps_from
+
+    saved = tmp_path / ".env"
+    saved.write_text("ANTHROPIC_API_KEY=sk-ant-real\nJARVIS_PROVIDER=nvidia\n")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "")  # as left by the project .env
+    monkeypatch.setenv("JARVIS_PROVIDER", "anthropic")
+    fill_gaps_from(saved)
+    import os
+
+    assert os.environ["ANTHROPIC_API_KEY"] == "sk-ant-real"
+    assert os.environ["JARVIS_PROVIDER"] == "anthropic"  # a real value still wins
+    fill_gaps_from(tmp_path / "missing.env")  # no file is fine
