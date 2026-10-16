@@ -65,7 +65,18 @@ task needs looking at the screen and clicking \
 use use_screen with the whole task. Use several tools in a row when a request \
 needs it. If a request is unclear or no tool can do it, say so rather than \
 guessing. When a tool fails, tell the user what its error said, since it \
-usually explains how to fix it."""
+usually explains how to fix it.
+
+You also have a memory that lasts across days. When the user tells you \
+something worth knowing next time (their name, where they live, their school \
+or classes, people in their life, what they like), save it with remember \
+without being asked, and say so in a few words. Use forget when they ask. You \
+can get the weather and news headlines, set timers, and set reminders that \
+you'll say out loud at the time. When the user asks for a briefing or says \
+good morning, give a short spoken rundown: the weather where they live, \
+today's calendar events, unread email worth knowing about, today's timers and \
+reminders, and two or three headlines. Skip anything you can't check, and \
+keep it to about six sentences."""
 
 WEB_SEARCH_HINT = " Search the web when a question needs current information."
 
@@ -169,7 +180,11 @@ class Brain:
 
     # ---- what each backend provides -----------------------------------------
 
-    def _step(self, system: str, messages: list, tools: list, model: str, effort: str) -> Step:
+    def _step(
+        self, system: str, messages: list, tools: list, model: str, effort: str, on_text=None
+    ) -> Step:
+        """One request to the AI. With on_text, the reply's text is passed to
+        it piece by piece as it's written, so it can be spoken straight away."""
         raise NotImplementedError
 
     def _user(self, text: str, image_b64: str | None = None) -> list:
@@ -184,8 +199,13 @@ class Brain:
     def _command_tools(self) -> list:
         return command_tools(can_see_screen=bool(self.vision_model))
 
+    # Added to the command instructions; Claude adds its web search hint.
+    COMMAND_HINT = ""
+
     def _command_system(self) -> str:
-        return COMMAND_SYSTEM
+        from . import memory
+
+        return COMMAND_SYSTEM + self.COMMAND_HINT + memory.prompt_section()
 
     # ---- shared behaviour ---------------------------------------------------
 
@@ -228,9 +248,10 @@ class Brain:
             raise RuntimeError("The AI didn't send back a rewrite.")
         return step.text
 
-    def ask_about_screen(self, question: str, screenshot_b64: str) -> str:
+    def ask_about_screen(self, question: str, screenshot_b64: str, on_text=None) -> str:
         step = self._step(
-            ASK_SYSTEM, self._user(question, screenshot_b64), [], self.vision_model, "medium"
+            ASK_SYSTEM, self._user(question, screenshot_b64), [], self.vision_model, "medium",
+            on_text=on_text,
         )
         if step.refused:
             return REFUSAL_REPLY
@@ -254,12 +275,14 @@ class Brain:
                 return f"Failed: {error}", True
         return _run_tool_safely(call.name, call.args)
 
-    def run_command(self, command: str) -> str:
+    def run_command(self, command: str, on_text=None) -> str:
         history = self._start_command(command)
         tools = self._command_tools()
 
         for _ in range(MAX_TOOL_ROUNDS):
-            step = self._step(self._command_system(), history, tools, self.model, "medium")
+            step = self._step(
+                self._command_system(), history, tools, self.model, "medium", on_text=on_text
+            )
             history.append(step.assistant)
             if step.paused:
                 continue
@@ -365,20 +388,31 @@ class AnthropicBrain(Brain):
     def _command_tools(self) -> list:
         return super()._command_tools() + [WEB_SEARCH_TOOL]
 
-    def _command_system(self) -> str:
-        return COMMAND_SYSTEM + WEB_SEARCH_HINT
+    COMMAND_HINT = WEB_SEARCH_HINT
 
-    def _step(self, system, messages, tools, model, effort) -> Step:
+    def _stream(self, on_text, **kwargs):
+        with self.client.beta.messages.stream(
+            max_tokens=16000,
+            betas=[self.FALLBACK_BETA],
+            fallbacks="default",
+            **kwargs,
+        ) as stream:
+            for text in stream.text_stream:
+                on_text(text)
+            return stream.get_final_message()
+
+    def _step(self, system, messages, tools, model, effort, on_text=None) -> Step:
         kwargs = {}
         if tools:
             kwargs["tools"] = tools
-        response = self._create(
+        request = dict(
             model=model,
             system=system,
             output_config={"effort": effort},
             messages=messages,
             **kwargs,
         )
+        response = self._stream(on_text, **request) if on_text else self._create(**request)
         return Step(
             text="".join(b.text for b in response.content if b.type == "text").strip(),
             calls=[Call(b.id, b.name, b.input) for b in response.content if b.type == "tool_use"],
@@ -419,6 +453,74 @@ THINK_TAGS = re.compile(r"<think>.*?</think>", re.DOTALL)
 # with their own error text as the "reply", e.g. "[ERROR: Agent failed
 # (Function ... timed out after 90.0 seconds) ...]".
 SERVICE_ERROR = re.compile(r"^\s*\[ERROR:", re.IGNORECASE)
+
+
+def _partial_suffix(text: str, tag: str) -> int:
+    """How many characters at the end of text could be the start of tag."""
+    for size in range(min(len(tag) - 1, len(text)), 0, -1):
+        if text.endswith(tag[:size]):
+            return size
+    return 0
+
+
+class SpokenText:
+    """Passes streamed reply text on as it arrives, leaving out <think>
+    sections and a service's "[ERROR: ..." text, so neither is read aloud."""
+
+    OPEN, CLOSE = "<think>", "</think>"
+
+    def __init__(self, on_text):
+        self.on_text = on_text
+        self.buffer = ""
+        self.thinking = False
+        self.held = ""  # the opening, held until it's clearly not an error
+        self.checked = False
+        self.blocked = False
+
+    def feed(self, text: str) -> None:
+        self.buffer += text
+        self._drain(final=False)
+
+    def close(self) -> None:
+        self._drain(final=True)
+        self._emit("", final=True)
+
+    def _drain(self, final: bool) -> None:
+        while self.buffer:
+            if self.thinking:
+                end = self.buffer.find(self.CLOSE)
+                if end < 0:
+                    keep = 0 if final else _partial_suffix(self.buffer, self.CLOSE)
+                    self.buffer = self.buffer[len(self.buffer) - keep:] if keep else ""
+                    return
+                self.buffer = self.buffer[end + len(self.CLOSE):]
+                self.thinking = False
+                continue
+            start = self.buffer.find(self.OPEN)
+            if start >= 0:
+                self._emit(self.buffer[:start], final)
+                self.buffer = self.buffer[start + len(self.OPEN):]
+                self.thinking = True
+                continue
+            keep = 0 if final else _partial_suffix(self.buffer, self.OPEN)
+            self._emit(self.buffer[: len(self.buffer) - keep], final)
+            self.buffer = self.buffer[len(self.buffer) - keep:]
+            return
+
+    def _emit(self, text: str, final: bool) -> None:
+        if self.blocked:
+            return
+        if not self.checked:
+            self.held += text
+            if len(self.held.strip()) < 8 and not final:
+                return
+            self.checked = True
+            if SERVICE_ERROR.match(self.held):
+                self.blocked = True
+                return
+            text, self.held = self.held, ""
+        if text:
+            self.on_text(text)
 
 
 class OpenAICompatibleBrain(Brain):
@@ -493,16 +595,55 @@ class OpenAICompatibleBrain(Brain):
                 self._thinking_off = {}
         return self.client.chat.completions.create(max_tokens=8192, **kwargs)
 
-    def _step(self, system, messages, tools, model, effort) -> Step:
+    def _stream_message(self, on_text, **kwargs):
+        """Streams a reply, passing its text on as it comes, and puts the
+        pieces back together into the same shape a normal reply has."""
+        from types import SimpleNamespace
+
+        spoken = SpokenText(on_text)
+        content, refusal, calls = [], [], {}
+        for chunk in self._create(stream=True, **kwargs):
+            if not chunk.choices:
+                continue
+            delta = chunk.choices[0].delta
+            if delta.content:
+                content.append(delta.content)
+                spoken.feed(delta.content)
+            if getattr(delta, "refusal", None):
+                refusal.append(delta.refusal)
+            for piece in delta.tool_calls or []:
+                slot = calls.setdefault(piece.index, {"id": "", "name": "", "arguments": ""})
+                if piece.id:
+                    slot["id"] = piece.id
+                if piece.function is not None:
+                    if piece.function.name and not slot["name"]:
+                        slot["name"] = piece.function.name
+                    slot["arguments"] += piece.function.arguments or ""
+        spoken.close()
+        tool_calls = [
+            SimpleNamespace(
+                id=slot["id"] or f"call_{index}",
+                function=SimpleNamespace(name=slot["name"], arguments=slot["arguments"]),
+            )
+            for index, slot in sorted(calls.items())
+        ]
+        return SimpleNamespace(
+            content="".join(content), tool_calls=tool_calls or None, refusal="".join(refusal) or None
+        )
+
+    def _step(self, system, messages, tools, model, effort, on_text=None) -> Step:
         kwargs = {}
         if tools:
             kwargs["tools"] = to_openai(tools)
-        response = self._create(
+        request = dict(
             model=model,
             messages=[{"role": "system", "content": system}, *messages],
             **kwargs,
         )
-        message = response.choices[0].message
+        if on_text:
+            message = self._stream_message(on_text, **request)
+        else:
+            message = self._create(**request).choices[0].message
         text = THINK_TAGS.sub("", message.content or "").strip()
         if SERVICE_ERROR.match(text) and not message.tool_calls:
             timed_out = "timed out" in text.lower()

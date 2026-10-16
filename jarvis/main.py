@@ -4,7 +4,7 @@ import threading
 import time
 import traceback
 
-from . import contact, desktop, prefs, quick, remote, router, tools, voice
+from . import contact, desktop, prefs, quick, remote, router, timers, tools, voice
 from .audio import Recorder, Transcriber
 from .brain import make_brain
 from . import config as settings
@@ -61,6 +61,18 @@ def acquire_single_instance(wait_seconds: float = 3.0) -> bool:
                 lock_file.close()
                 return False
             time.sleep(0.25)
+
+
+def chime() -> None:
+    """A short sound before Jarvis speaks up on its own."""
+    if not config.is_mac:
+        return
+    import subprocess
+
+    try:
+        subprocess.run(["afplay", "/System/Library/Sounds/Glass.aiff"], timeout=5, check=False)
+    except (OSError, subprocess.SubprocessError):
+        pass
 
 
 class Jarvis:
@@ -220,34 +232,102 @@ class Jarvis:
             return
 
         asked_at = time.monotonic()
-        if mode == "ask":
-            log(f"Asking {self.brain.vision_model} about the screen...")
-            reply = self.brain.ask_about_screen(text, desktop.screenshot_png_base64(config.screenshot_width))
-        else:
-            quick_command = quick.match(text)
-            if quick_command:
-                log(f"Quick command: {quick_command.action}")
-                reply = quick.run(quick_command)
-            else:
-                log(f"Asking {self.brain.model}...")
-                reply = self.brain.run_command(text)
-        if not current():
-            log("(Dropped the reply to an interrupted request.)")
-            return
-        log(f"Reply: {reply!r} ({time.monotonic() - asked_at:.1f}s)")
-        shown = voice.clean_for_speech(reply, keep_links=True)
-        self.hud.reply(shown, heard=text)
+        # Jarvis starts talking as soon as the first sentence of the reply
+        # arrives, instead of waiting for the whole thing.
+        stream = None
         if prefs.get("speak_replies"):
-            self.hud.speaking(True)
-            try:
-                desktop.speak(reply)  # returns once finished, or when interrupted
-            finally:
+            stream = voice.SpeechStream(on_start=lambda: self.hud.speaking(True))
+        on_text = stream.feed if stream else None
+        try:
+            if mode == "ask":
+                log(f"Asking {self.brain.vision_model} about the screen...")
+                shot = desktop.screenshot_png_base64(config.screenshot_width)
+                reply = self.brain.ask_about_screen(text, shot, on_text=on_text)
+            else:
+                quick_command = quick.match(text)
+                if quick_command:
+                    log(f"Quick command: {quick_command.action}")
+                    reply = quick.run(quick_command)
+                else:
+                    log(f"Asking {self.brain.model}...")
+                    reply = self.brain.run_command(text, on_text=on_text)
+            if not current():
+                log("(Dropped the reply to an interrupted request.)")
+                return
+            log(f"Reply: {reply!r} ({time.monotonic() - asked_at:.1f}s)")
+            shown = voice.clean_for_speech(reply, keep_links=True)
+            self.hud.reply(shown, heard=text)
+            if stream:
+                try:
+                    stream.finish()  # returns once said, or when interrupted
+                    # Replies that weren't streamed (quick commands, refusals,
+                    # "too many steps") are said now.
+                    if current() and " ".join(reply.split()) not in " ".join(stream.heard.split()):
+                        self.hud.speaking(True)
+                        desktop.speak(reply)
+                finally:
+                    if current():
+                        self.hud.speaking(False)
                 if current():
+                    self.hud.hide(after=2.0)
+            else:
+                self.hud.hide(after=reply_seconds(shown))
+        finally:
+            if stream:
+                stream.finish(wait=False)
+
+    def announce(self, text: str) -> None:
+        """Says a timer, reminder or briefing out loud (after a chime), shows
+        it in the notch, and sends it to the phone when ntfy is set up."""
+        log(f"Announcing: {text!r}")
+
+        def run():
+            # Let whatever Jarvis is in the middle of (or you are saying) finish first.
+            deadline = time.monotonic() + 90
+            while (self._busy or self.recorder.recording) and time.monotonic() < deadline:
+                time.sleep(0.5)
+            if config.alerts_to_phone and contact.ntfy_configured():
+                try:
+                    contact.text_me(text)
+                except Exception as error:
+                    log(f"Couldn't send that to your phone: {error}")
+            chime()
+            shown = voice.clean_for_speech(text, keep_links=True)
+            self.hud.reply(shown)
+            if prefs.get("speak_replies"):
+                self.hud.speaking(True)
+                try:
+                    desktop.speak(text)
+                finally:
                     self.hud.speaking(False)
-            if current():
                 self.hud.hide(after=2.0)
-        else:
-            self.hud.hide(after=reply_seconds(shown))
+            else:
+                self.hud.hide(after=reply_seconds(shown))
+
+        threading.Thread(target=run, daemon=True).start()
+
+    def briefing(self) -> None:
+        """The daily briefing, at JARVIS_BRIEFING_TIME."""
+
+        def run():
+            deadline = time.monotonic() + 300
+            while self._busy and time.monotonic() < deadline:
+                time.sleep(1)
+            log("Time for the daily briefing.")
+            self._busy = True
+            job = self._job  # pressing the key to talk cancels the briefing
+            try:
+                reply = self.brain.run_command("Good morning. Give me my briefing.")
+            except Exception as error:
+                log(f"The briefing failed: {error}")
+                return
+            finally:
+                if self._current(job):
+                    self._busy = False
+            if self._current(job):
+                self.announce(reply)
+
+        threading.Thread(target=run, daemon=True).start()
 
     def phone_message(self, text: str) -> None:
         """A message typed on the phone (see remote.py): run it like a spoken
@@ -318,6 +398,9 @@ class Jarvis:
         voice.warm_up()
         self.transcriber.warm_up()
         print(f"Jarvis is running, using {config.provider} ({self.brain.model}).")
+        timers.start(self.announce, self.briefing)
+        if config.briefing_time:
+            print(f"  daily briefing at {config.briefing_time}")
         if remote.configured():
             remote.listen(self.phone_message, log=log)
             print("  messages from your phone are on (ntfy)")

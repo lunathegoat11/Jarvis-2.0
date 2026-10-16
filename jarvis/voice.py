@@ -173,14 +173,19 @@ def _warm():
         print(f"Couldn't load the Kokoro voice ({error}); using the built-in voice.")
 
 
+def _kokoro_settings() -> dict:
+    voice = prefs.get("voice", config.voice) or "bm_george"
+    # British voices (bm_, bf_) are spoken with a British accent.
+    lang = "en-gb" if voice[:2] in ("bm", "bf") else "en-us"
+    return {"voice": voice, "speed": float(prefs.get("voice_speed", config.voice_speed)), "lang": lang}
+
+
 def _speak_kokoro(text: str) -> None:
     import sounddevice as sd
 
     kokoro = load_kokoro()
-    voice = prefs.get("voice", config.voice) or "bm_george"
-    # British voices (bm_, bf_) are spoken with a British accent.
-    lang = "en-gb" if voice[:2] in ("bm", "bf") else "en-us"
-    speed = float(prefs.get("voice_speed", config.voice_speed))
+    settings = _kokoro_settings()
+    voice, speed, lang = settings["voice"], settings["speed"], settings["lang"]
     chunks: queue.Queue = queue.Queue()
     mine = _generation
 
@@ -244,3 +249,100 @@ def speak(text: str) -> None:
         except Exception as error:
             print(f"Kokoro voice failed ({error}); using the built-in voice.")
     _speak_system(text)
+
+
+# Where a streamed reply can be cut into something to say: after a sentence's
+# closing punctuation, or at a line break (list items, headings).
+SPEAKABLE_END = re.compile(r"(?<=[.!?;:])\s+|\n+")
+
+
+class SpeechStream:
+    """Speaks a reply sentence by sentence while the AI is still writing it.
+
+    feed() takes text as it arrives; finish() says whatever is left and, by
+    default, waits until Jarvis has finished talking. With Kokoro, the next
+    sentence is turned into audio while the current one plays. stop()
+    silences it like any other speech.
+    """
+
+    def __init__(self, on_start=None):
+        self._mine = _generation
+        self._buffer = ""
+        self._sentences: queue.Queue = queue.Queue()
+        self._on_start = on_start
+        self._finished = False
+        self.heard = ""  # everything fed in, to tell what was already said
+        self.spoke = False
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+
+    def feed(self, text: str) -> None:
+        self.heard += text
+        self._buffer += text
+        *done, self._buffer = SPEAKABLE_END.split(self._buffer)
+        for sentence in done:
+            self._put(sentence)
+
+    def finish(self, wait: bool = True) -> None:
+        if not self._finished:
+            self._finished = True
+            self._put(self._buffer)
+            self._buffer = ""
+            self._sentences.put(None)
+        if wait:
+            self._thread.join()
+
+    def _put(self, sentence: str) -> None:
+        if sentence.strip():
+            self._sentences.put(sentence)
+
+    def _stopped(self) -> bool:
+        return _generation != self._mine
+
+    def _started(self) -> None:
+        if not self.spoke:
+            self.spoke = True
+            if self._on_start:
+                self._on_start()
+
+    def _run(self) -> None:
+        kokoro = None
+        if engine() == "kokoro":
+            try:
+                settings = _kokoro_settings()
+                kokoro = load_kokoro()
+            except Exception as error:
+                print(f"Kokoro voice failed ({error}); using the built-in voice.")
+        audio: queue.Queue = queue.Queue()
+        player = None
+        if kokoro is not None:
+            player = threading.Thread(target=self._play, args=(audio,), daemon=True)
+            player.start()
+        while (sentence := self._sentences.get()) is not None:
+            if self._stopped():
+                continue
+            text = clean_for_speech(sentence)
+            if not text:
+                continue
+            if kokoro is not None:
+                try:
+                    audio.put(kokoro.create(text, **settings))
+                    continue
+                except Exception as error:
+                    print(f"Kokoro voice failed ({error}); using the built-in voice.")
+            self._started()
+            _speak_system(text)
+        if player is not None:
+            audio.put(None)
+            player.join()
+
+    def _play(self, audio: queue.Queue) -> None:
+        import sounddevice as sd
+
+        while (chunk := audio.get()) is not None:
+            if self._stopped():
+                continue
+            self._started()
+            samples, sample_rate = chunk
+            sd.play(samples, sample_rate)
+            sd.wait()  # stop() ends this early

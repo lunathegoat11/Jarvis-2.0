@@ -142,13 +142,27 @@ On a Mac, Jarvis uses the Calendar and Reminders apps, so any account you've add
 
 Repeating events may not show up when Jarvis checks your calendar, because of a limit in how Calendar answers these requests.
 
+## Memory, weather, timers and briefings
+
+Jarvis remembers things about you across days. Tell it "remember I live in Princeton, NJ" or just mention where you go to school, and it saves the fact to `~/.jarvis/memory.json` (a plain file you can read or edit). "What do you remember about me?" and "forget that I have a test Friday" work too. It won't save passwords or card numbers.
+
+Ask for the weather ("do I need a jacket?") or the news ("what's happening in tech?") and Jarvis looks them up from Open-Meteo and BBC News, which need no account. It uses the town you've told it you live in, or `JARVIS_LOCATION` in `.env`. Temperatures are in °F in the US and °C elsewhere unless you set `JARVIS_UNITS`.
+
+"Set a timer for 10 minutes", "remind me at 5 to call grandma" and "remind me in 20 minutes to check the oven" make Jarvis chime and say the reminder out loud when it's due, and send it to your phone if ntfy is set up (`JARVIS_ALERTS_TO_PHONE=0` turns that off). They're saved in `~/.jarvis/timers.json`, so a restart doesn't lose them. "What timers do I have?" and "cancel the pasta timer" work as you'd expect. These are separate from the Reminders app, which "add a reminder to buy milk" still uses.
+
+Say "good morning" or "brief me" for a short rundown of the weather, today's calendar, email worth knowing about, your reminders and a few headlines. Set `JARVIS_BRIEFING_TIME=07:30` and Jarvis gives the briefing on its own each day. If the Mac was asleep at that time, it catches up when you're back within three hours.
+
+Replies are spoken as they're written: Jarvis starts talking after the first sentence instead of waiting for the whole answer.
+
 ## Texting and calling you
 
 Jarvis can send you a text or ring your phone when you ask ("text me the address", "call me in five minutes", "text me when it's done"). Put your number in the app's settings (the gear) under **Your phone number**, or set `JARVIS_MY_NUMBER` in `.env`.
 
 On a Mac this uses **your own** iMessage and FaceTime: a text comes from you, and a call is a FaceTime audio call placed from your Mac to your number, so it rings your phone. Jarvis doesn't get its own number this way. The first time it texts, macOS asks to let Jarvis control Messages — allow it in System Settings > Privacy & Security > Automation.
 
-For Jarvis to have its own separate number that can SMS and call any phone (not just through your Apple ID), set up a free [Twilio](https://www.twilio.com) trial: buy a number, then add to `.env`:
+For free alerts on your phone with no number at all, install the [ntfy](https://ntfy.sh) app, subscribe to a long random topic name, and set `NTFY_TOPIC` to it. "Text me" then sends a notification, and "call me" sends an urgent one. Set `NTFY_REPLY_TOPIC` to a second random topic and you can message Jarvis back (for example from an iPhone Shortcut); it runs the message as a command and answers on your phone. Anyone who knows the reply topic can control your Mac through Jarvis, so keep it secret.
+
+For Jarvis to have its own separate number that can SMS and call any phone, use [Twilio](https://www.twilio.com). A trial account can only send Twilio's ready-made sample texts, so you'll need to upgrade it, and US carriers expect a local number to be registered for A2P 10DLC. Then add to `.env`:
 
 ```
 TWILIO_SID=ACxxxxxxxx

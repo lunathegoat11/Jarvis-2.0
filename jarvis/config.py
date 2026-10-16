@@ -164,6 +164,15 @@ class Config:
     # separated by commas. Also editable in the app.
     vocabulary: str = os.environ.get("JARVIS_VOCABULARY", "")
 
+    # Where you are, for the weather (e.g. "Princeton, NJ"). Jarvis can also
+    # remember it from you saying so. Units: auto, fahrenheit or celsius.
+    location: str = _first("JARVIS_LOCATION")
+    units: str = (_first("JARVIS_UNITS") or "auto").lower()
+    # A spoken morning briefing at this time each day, e.g. 07:30. Empty: off.
+    briefing_time: str = _first("JARVIS_BRIEFING_TIME")
+    # Timers, reminders and briefings also go to your phone when ntfy is set up.
+    alerts_to_phone: bool = os.environ.get("JARVIS_ALERTS_TO_PHONE", "1") == "1"
+
     # Which calendar new events go in; empty means the first one you can edit.
     calendar_name: str = os.environ.get("JARVIS_CALENDAR", "")
 

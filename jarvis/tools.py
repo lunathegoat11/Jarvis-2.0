@@ -129,6 +129,97 @@ TOOLS = [
     },
 ]
 
+# Memory, weather, news, timers and reminders. These work with every AI
+# provider, so they don't depend on Claude's web search.
+TOOLS += [
+    {
+        "name": "remember",
+        "description": (
+            "Save a lasting fact about the user so you know it in future conversations: "
+            "their name, where they live, school or work, classes, people in their life, "
+            "likes and dislikes, routines. Save one fact per call, in a short sentence "
+            "about the user ('Lives in Princeton, NJ'). Never save passwords, codes or "
+            "card numbers."
+        ),
+        "strict": True,
+        "input_schema": _schema({"fact": {"type": "string"}}, ["fact"]),
+    },
+    {
+        "name": "forget",
+        "description": (
+            "Delete saved facts about the user. Every fact containing the given words is "
+            "removed, so quote the part that identifies it."
+        ),
+        "strict": True,
+        "input_schema": _schema({"about": {"type": "string"}}, ["about"]),
+    },
+    {
+        "name": "get_weather",
+        "description": (
+            "Current weather and a 3-day forecast. place is a town like 'Princeton, NJ'; "
+            "use where the user lives (from what you remember) unless they name somewhere "
+            "else, or an empty string to use their saved location."
+        ),
+        "strict": True,
+        "input_schema": _schema({"place": {"type": "string"}}, ["place"]),
+    },
+    {
+        "name": "get_news",
+        "description": "Today's headlines from BBC News, with a line about each.",
+        "strict": True,
+        "input_schema": _schema(
+            {
+                "topic": {
+                    "type": "string",
+                    "enum": ["top", "world", "us", "business", "technology", "science",
+                             "health", "entertainment", "sport"],
+                },
+                "count": {"type": "integer"},
+            },
+            ["topic", "count"],
+        ),
+    },
+    {
+        "name": "set_timer",
+        "description": (
+            "Start a timer; Jarvis says out loud when it's done. seconds is its length; "
+            "label is what it's for ('pasta'), or an empty string."
+        ),
+        "strict": True,
+        "input_schema": _schema(
+            {"seconds": {"type": "integer"}, "label": {"type": "string"}}, ["seconds", "label"]
+        ),
+    },
+    {
+        "name": "remind_me",
+        "description": (
+            "Have Jarvis say a reminder out loud (and send it to the user's phone) at a "
+            "set time, e.g. 'remind me at 5 to call grandma'. when is local time as "
+            "'YYYY-MM-DD HH:MM'. For 'in 20 minutes' work out the time from the current "
+            "time. This is Jarvis's own reminder, not the Reminders app (add_reminder)."
+        ),
+        "strict": True,
+        "input_schema": _schema(
+            {"when": {"type": "string"}, "message": {"type": "string"}}, ["when", "message"]
+        ),
+    },
+    {
+        "name": "list_timers",
+        "description": "List the timers and reminders Jarvis has set, with how long is left.",
+        "strict": True,
+        "input_schema": _schema({}, []),
+    },
+    {
+        "name": "cancel_timer",
+        "description": (
+            "Cancel a timer or reminder by its id from list_timers, or by words in it "
+            "('pasta'), or 'all'."
+        ),
+        "strict": True,
+        "input_schema": _schema({"which": {"type": "string"}}, ["which"]),
+    },
+]
+
 # Documents written this run, newest last, so a request from the phone can
 # send them there (see main.py).
 made_documents: list = []
@@ -479,6 +570,29 @@ def run_tool(name: str, args: dict) -> str:
         if not notes:
             return "No notes saved yet."
         return "\n".join(f"{n['time']}: {n['text']}" for n in notes)
+    if name in ("remember", "forget"):
+        from . import memory
+
+        return memory.remember(args["fact"]) if name == "remember" else memory.forget(args["about"])
+    if name == "get_weather":
+        from . import info
+
+        return info.weather(args["place"])
+    if name == "get_news":
+        from . import info
+
+        return info.news(args["topic"], args["count"])
+    if name in ("set_timer", "remind_me", "list_timers", "cancel_timer"):
+        from . import timers
+
+        scheduler = timers.get()
+        if name == "set_timer":
+            return scheduler.add_timer(args["seconds"], args["label"])
+        if name == "remind_me":
+            return scheduler.add_reminder(args["when"], args["message"])
+        if name == "list_timers":
+            return scheduler.pending()
+        return scheduler.cancel(args["which"])
     if name == "write_document":
         path = write_document(args["title"], args["content"])
         return f"Saved it as {path.name} in Documents > Jarvis and opened it."
