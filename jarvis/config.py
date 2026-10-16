@@ -173,6 +173,9 @@ class Config:
     ntfy_topic: str = _first("NTFY_TOPIC")
     ntfy_server: str = _first("NTFY_SERVER") or "https://ntfy.sh"
     ntfy_token: str = _first("NTFY_TOKEN")
+    # A second private topic for messages from your phone to Jarvis (see
+    # remote.py). Whoever knows it can control the Mac, so keep it secret.
+    ntfy_reply_topic: str = _first("NTFY_REPLY_TOPIC")
 
     sample_rate: int = 16000
     # Which microphone to use. "auto" prefers the computer's own mic over

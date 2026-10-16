@@ -14,6 +14,7 @@ Set your number in the app settings, or JARVIS_MY_NUMBER in .env.
 import json
 import subprocess
 import urllib.error
+import urllib.parse
 import urllib.request
 
 from . import prefs
@@ -136,7 +137,18 @@ def call_me(reason: str = "") -> str:
 # ---- ntfy (free phone notifications, optional) -------------------------------
 
 
+# The last alert sent, so a reply from the phone hours later still has
+# something to answer.
+last_alert = ""
+
+# The iPhone Shortcut that sends messages back to Jarvis (see remote.py).
+REPLY_SHORTCUT = "Tell Jarvis"
+
+
 def _ntfy(message: str, urgent: bool) -> str:
+    global last_alert
+    from . import remote
+
     url = f"{config.ntfy_server.rstrip('/')}/{config.ntfy_topic}"
     headers = {
         "Title": "Jarvis needs you" if urgent else "Jarvis",
@@ -145,6 +157,10 @@ def _ntfy(message: str, urgent: bool) -> str:
         "Priority": "5" if urgent else "3",
         "Tags": "rotating_light" if urgent else "speech_balloon",
     }
+    if remote.configured():
+        # A button on the alert that opens the Shortcut for replying.
+        name = urllib.parse.quote(REPLY_SHORTCUT)
+        headers["Actions"] = f"view, Reply, shortcuts://run-shortcut?name={name}"
     if config.ntfy_token:
         headers["Authorization"] = f"Bearer {config.ntfy_token}"
     request = urllib.request.Request(url, data=message.encode("utf-8"), headers=headers)
@@ -160,6 +176,7 @@ def _ntfy(message: str, urgent: bool) -> str:
         raise RuntimeError(f"ntfy said: HTTP {error.code}") from None
     except urllib.error.URLError as error:
         raise RuntimeError(f"Couldn't reach ntfy ({error.reason}). Is the Mac online?") from None
+    last_alert = message
     return "Sent an urgent alert to your phone." if urgent else "Sent it to your phone."
 
 

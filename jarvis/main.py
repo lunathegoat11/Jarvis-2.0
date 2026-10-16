@@ -4,7 +4,7 @@ import threading
 import time
 import traceback
 
-from . import desktop, prefs, quick, router, voice
+from . import contact, desktop, prefs, quick, remote, router, voice
 from .audio import Recorder, Transcriber
 from .brain import make_brain
 from . import config as settings
@@ -249,6 +249,51 @@ class Jarvis:
         else:
             self.hud.hide(after=reply_seconds(shown))
 
+    def phone_message(self, text: str) -> None:
+        """A message typed on the phone (see remote.py): run it like a spoken
+        command and send the answer back to the phone."""
+        log(f"From your phone: {text!r}")
+        self.interrupt()
+        self._busy = True
+        job = self._job
+        threading.Thread(target=self._run_phone_job, args=(text, job), daemon=True).start()
+
+    def _run_phone_job(self, text: str, job: int) -> None:
+        current = lambda: self._current(job)  # noqa: E731
+        try:
+            self.hud.thinking(text)
+            quick_command = quick.match(text)
+            if quick_command:
+                reply = quick.run(quick_command)
+            else:
+                note = (
+                    "[Typed on the user's phone while they're away from the Mac. Your reply "
+                    "goes back to their phone by itself, so keep it to a sentence or two and "
+                    "don't use text_me or call_me to answer."
+                )
+                if contact.last_alert:
+                    note += f' Your last alert to their phone said: "{contact.last_alert}"'
+                reply = self.brain.run_command(f"{note}]\n{text}")
+            if not current():
+                return
+            log(f"Reply: {reply!r}")
+            shown = voice.clean_for_speech(reply, keep_links=True)
+            self.hud.reply(shown, heard=text)
+            self.hud.hide(after=reply_seconds(shown))
+            contact.text_me(shown)
+        except Exception as error:
+            log("A message from your phone failed:")
+            traceback.print_exc()
+            if current():
+                self.hud.error(str(error))
+            try:
+                contact.text_me(f"That didn't work: {error}")
+            except Exception:
+                pass
+        finally:
+            if current():
+                self._busy = False
+
     def _run_job(self, mode: str, audio, job: int) -> None:
         try:
             self.handle(mode, audio, job)
@@ -265,6 +310,11 @@ class Jarvis:
         voice.warm_up()
         self.transcriber.warm_up()
         print(f"Jarvis is running, using {config.provider} ({self.brain.model}).")
+        if remote.configured():
+            remote.listen(self.phone_message, log=log)
+            print("  messages from your phone are on (ntfy)")
+        elif config.ntfy_reply_topic:
+            print("  NTFY_REPLY_TOPIC must be different from NTFY_TOPIC; phone messages are off.")
 
         # Hold-to-talk needs the macOS event loop, which the notch panel runs.
         if config.hold_keys and isinstance(self.hud, NotchHUD):
