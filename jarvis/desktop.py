@@ -3,11 +3,56 @@
 import base64
 import io
 import subprocess
+import threading
 import time
 import urllib.parse
 import webbrowser
 
 from .config import config
+
+
+def _app_loop_running() -> bool:
+    try:
+        from AppKit import NSApp
+
+        app = NSApp()
+        return app is not None and bool(app.isRunning())
+    except Exception:
+        return False
+
+
+def on_main_thread(fn, *args):
+    """Runs fn on the main thread and waits for it.
+
+    pynput reads the keyboard layout for every key it presses, and recent
+    macOS kills the whole app ("trace trap") when that happens off the main
+    thread. Requests run on background threads, so key presses come here.
+    """
+    if (
+        not config.is_mac
+        or threading.current_thread() is threading.main_thread()
+        or not _app_loop_running()
+    ):
+        return fn(*args)
+    from PyObjCTools import AppHelper
+
+    done = threading.Event()
+    outcome = {}
+
+    def run():
+        try:
+            outcome["value"] = fn(*args)
+        except BaseException as error:  # handed back to the caller below
+            outcome["error"] = error
+        finally:
+            done.set()
+
+    AppHelper.callAfter(run)
+    if not done.wait(15):
+        raise RuntimeError("The Mac took too long to press the keys.")
+    if "error" in outcome:
+        raise outcome["error"]
+    return outcome.get("value")
 
 
 def paste_text(text: str) -> None:
@@ -24,11 +69,15 @@ def paste_text(text: str) -> None:
         previous = None
 
     pyperclip.copy(text)
-    keyboard = Controller()
-    modifier = Key.cmd if config.is_mac else Key.ctrl
-    with keyboard.pressed(modifier):
-        keyboard.press("v")
-        keyboard.release("v")
+
+    def press_paste():
+        keyboard = Controller()
+        modifier = Key.cmd if config.is_mac else Key.ctrl
+        with keyboard.pressed(modifier):
+            keyboard.press("v")
+            keyboard.release("v")
+
+    on_main_thread(press_paste)
 
     # Give the target app time to read the clipboard before we put it back.
     time.sleep(0.3)
@@ -183,14 +232,18 @@ def press_keys(combo: str) -> None:
     # Let go of the hotkey that triggered Jarvis before pressing anything.
     time.sleep(0.15)
     last_keys_at = time.monotonic()
-    keyboard = Controller()
-    *held, last = keys
-    for key in held:
-        keyboard.press(key)
-    keyboard.press(last)
-    keyboard.release(last)
-    for key in reversed(held):
-        keyboard.release(key)
+
+    def press():
+        keyboard = Controller()
+        *held, last = keys
+        for key in held:
+            keyboard.press(key)
+        keyboard.press(last)
+        keyboard.release(last)
+        for key in reversed(held):
+            keyboard.release(key)
+
+    on_main_thread(press)
 
 
 def browser_shortcut(combo: str) -> str:
@@ -219,9 +272,13 @@ def media(action: str) -> None:
     from pynput.keyboard import Controller, Key
 
     key = getattr(Key, MEDIA_KEYS[action])
-    keyboard = Controller()
-    keyboard.press(key)
-    keyboard.release(key)
+
+    def press():
+        keyboard = Controller()
+        keyboard.press(key)
+        keyboard.release(key)
+
+    on_main_thread(press)
 
 
 def set_volume(level: int | None = None, change: int = 0, mute: bool | None = None) -> int:
