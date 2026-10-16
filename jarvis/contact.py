@@ -180,6 +180,32 @@ def _ntfy(message: str, urgent: bool) -> str:
     return "Sent an urgent alert to your phone." if urgent else "Sent it to your phone."
 
 
+def send_file(path, message: str) -> str:
+    """Sends a file to the phone through ntfy, with a short message. The
+    ntfy app shows it as an attachment you can open."""
+    global last_alert
+    if not ntfy_configured():
+        raise RuntimeError("Sending files to the phone needs ntfy (NTFY_TOPIC) set up.")
+    from pathlib import Path
+
+    path = Path(path)
+    query = urllib.parse.urlencode({"filename": path.name, "message": message, "title": "Jarvis"})
+    url = f"{config.ntfy_server.rstrip('/')}/{config.ntfy_topic}?{query}"
+    headers = {"Tags": "page_facing_up"}
+    if config.ntfy_token:
+        headers["Authorization"] = f"Bearer {config.ntfy_token}"
+    request = urllib.request.Request(url, data=path.read_bytes(), headers=headers, method="PUT")
+    try:
+        with urllib.request.urlopen(request, timeout=60):
+            pass
+    except urllib.error.HTTPError as error:
+        raise RuntimeError(f"ntfy wouldn't take the file: HTTP {error.code}") from None
+    except urllib.error.URLError as error:
+        raise RuntimeError(f"Couldn't reach ntfy ({error.reason}). Is the Mac online?") from None
+    last_alert = message
+    return "Sent it to your phone."
+
+
 # ---- Twilio (a real separate number, optional) ------------------------------
 
 

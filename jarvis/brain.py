@@ -47,7 +47,8 @@ speaks commands; you carry them out with your tools, then say briefly what you \
 did. Your reply is read aloud, so keep it to one or two plain sentences with no \
 markdown. You can open apps, websites and browser tabs, search the web in the \
 browser, press keyboard shortcuts, control music and volume, type text, read \
-the clipboard, and save or read notes. When email tools are available you can \
+the clipboard, save or read notes, and write longer things (study sheets, \
+drafts, plans) into a document with write_document. When email tools are available you can \
 check and read the user's email and open drafts for them to send; you can't \
 send email yourself. On a Mac you can check the calendar, add events (always \
 read the details back and wait for a yes first) and add reminders. You can \
@@ -413,6 +414,11 @@ class AnthropicBrain(Brain):
 
 THINK_TAGS = re.compile(r"<think>.*?</think>", re.DOTALL)
 
+# Some hosted services (NVIDIA's included) answer a request they gave up on
+# with their own error text as the "reply", e.g. "[ERROR: Agent failed
+# (Function ... timed out after 90.0 seconds) ...]".
+SERVICE_ERROR = re.compile(r"^\s*\[ERROR:", re.IGNORECASE)
+
 
 class OpenAICompatibleBrain(Brain):
     """For NVIDIA, Ollama and any other provider with an OpenAI-style API."""
@@ -497,6 +503,14 @@ class OpenAICompatibleBrain(Brain):
         )
         message = response.choices[0].message
         text = THINK_TAGS.sub("", message.content or "").strip()
+        if SERVICE_ERROR.match(text) and not message.tool_calls:
+            timed_out = "timed out" in text.lower()
+            service = {"nvidia": "NVIDIA", "ollama": "Ollama"}.get(config.provider, "The AI service")
+            raise RuntimeError(
+                f"{service}'s servers gave up before the AI finished"
+                + (" (it took too long)" if timed_out else "")
+                + ". Try again in a minute, or ask for something shorter."
+            )
 
         calls = []
         for tool_call in message.tool_calls or []:

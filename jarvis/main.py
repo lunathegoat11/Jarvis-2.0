@@ -4,7 +4,7 @@ import threading
 import time
 import traceback
 
-from . import contact, desktop, prefs, quick, remote, router, voice
+from . import contact, desktop, prefs, quick, remote, router, tools, voice
 from .audio import Recorder, Transcriber
 from .brain import make_brain
 from . import config as settings
@@ -260,6 +260,7 @@ class Jarvis:
 
     def _run_phone_job(self, text: str, job: int) -> None:
         current = lambda: self._current(job)  # noqa: E731
+        documents_before = len(tools.made_documents)
         try:
             self.hud.thinking(text)
             quick_command = quick.match(text)
@@ -269,7 +270,9 @@ class Jarvis:
                 note = (
                     "[Typed on the user's phone while they're away from the Mac. Your reply "
                     "goes back to their phone by itself, so keep it to a sentence or two and "
-                    "don't use text_me or call_me to answer."
+                    "don't use text_me or call_me to answer. For anything long they ask for, "
+                    "like notes or a study sheet, use write_document; the file is sent to "
+                    "their phone too."
                 )
                 if contact.last_alert:
                     note += f' Your last alert to their phone said: "{contact.last_alert}"'
@@ -280,7 +283,12 @@ class Jarvis:
             shown = voice.clean_for_speech(reply, keep_links=True)
             self.hud.reply(shown, heard=text)
             self.hud.hide(after=reply_seconds(shown))
-            contact.text_me(shown)
+            documents = tools.made_documents[documents_before:]
+            if documents:
+                for document in documents:
+                    contact.send_file(document, shown)
+            else:
+                contact.text_me(shown)
         except Exception as error:
             log("A message from your phone failed:")
             traceback.print_exc()

@@ -114,7 +114,24 @@ TOOLS = [
         "strict": True,
         "input_schema": _schema({}, []),
     },
+    {
+        "name": "write_document",
+        "description": (
+            "Write something longer the user asked for (a study guide or prep sheet, notes, "
+            "a draft, a plan, a list) into a document and open it on the Mac. Use this "
+            "instead of putting long text in your reply, then say in a sentence what you "
+            "made. content is plain text; headings and '-' bullets are fine."
+        ),
+        "strict": True,
+        "input_schema": _schema(
+            {"title": {"type": "string"}, "content": {"type": "string"}}, ["title", "content"]
+        ),
+    },
 ]
+
+# Documents written this run, newest last, so a request from the phone can
+# send them there (see main.py).
+made_documents: list = []
 
 USE_SCREEN_TOOL = {
     "name": "use_screen",
@@ -462,4 +479,35 @@ def run_tool(name: str, args: dict) -> str:
         if not notes:
             return "No notes saved yet."
         return "\n".join(f"{n['time']}: {n['text']}" for n in notes)
+    if name == "write_document":
+        path = write_document(args["title"], args["content"])
+        return f"Saved it as {path.name} in Documents > Jarvis and opened it."
     raise ValueError(f"Unknown tool: {name}")
+
+
+def write_document(title: str, content: str):
+    """Saves a document to ~/Documents/Jarvis and opens it. Returns its path."""
+    import re
+    import subprocess
+    from pathlib import Path
+
+    folder = Path.home() / "Documents" / "Jarvis"
+    folder.mkdir(parents=True, exist_ok=True)
+    name = re.sub(r"[^\w\- ]", "", title).strip()[:80] or "Jarvis document"
+    path = folder / f"{name}.txt"
+    if path.exists():
+        path = folder / f"{name} {datetime.now().strftime('%Y-%m-%d %H.%M.%S')}.txt"
+    path.write_text(f"{title}\n\n{content.strip()}\n", encoding="utf-8")
+    made_documents.append(path)
+    try:
+        if config.is_mac:
+            subprocess.run(["open", str(path)], check=False)
+        elif config.is_windows:
+            import os
+
+            os.startfile(path)  # noqa: S606
+        else:
+            subprocess.run(["xdg-open", str(path)], check=False)
+    except Exception:
+        pass  # saved either way; opening it is a nicety
+    return path
