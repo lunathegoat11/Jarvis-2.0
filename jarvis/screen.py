@@ -78,6 +78,35 @@ def capture(width: int | None = None, grid: bool | None = None) -> Shot:
     )
 
 
+def zoom(shot: Shot, region, max_width: int) -> str:
+    """A close-up of part of the screen, at full resolution, as base64 PNG.
+    region is [x0, y0, x1, y1] in the pixels of `shot`."""
+    import mss
+    from PIL import Image
+
+    x0, y0, x1, y1 = (float(v) for v in region)
+    if x1 <= x0 or y1 <= y0:
+        raise ValueError("The zoom region must have its top-left corner first.")
+    with mss.mss() as sct:
+        monitor = sct.monitors[1]
+        raw = sct.grab(monitor)
+        image = Image.frombytes("RGB", raw.size, raw.rgb)
+    # Image pixels -> screen points -> pixels of the full-resolution grab.
+    density = image.width / monitor["width"]
+    box = [
+        round(max(0, x0) * shot.scale * density),
+        round(max(0, y0) * shot.scale * density),
+        round(min(shot.width, x1) * shot.scale * density),
+        round(min(shot.height, y1) * shot.scale * density),
+    ]
+    close_up = image.crop(box)
+    if close_up.width > max_width:
+        close_up = close_up.resize((max_width, round(close_up.height * max_width / close_up.width)))
+    buffer = io.BytesIO()
+    close_up.save(buffer, format="PNG")
+    return base64.standard_b64encode(buffer.getvalue()).decode("ascii")
+
+
 def _schema(properties: dict) -> dict:
     return {
         "type": "object",

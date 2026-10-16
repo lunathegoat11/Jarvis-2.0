@@ -116,39 +116,105 @@ class Recorder:
         return audio
 
 
+# Whisper large-v3-turbo, converted to run on Apple Silicon's GPU with MLX.
+# Far more accurate than the small models, and still quick on an M-series Mac.
+MLX_MODEL = "mlx-community/whisper-large-v3-turbo"
+# Without MLX: a model that's much better than base.en and still quick on CPU.
+CPU_MODEL = "small.en"
+
+
+def mlx_available() -> bool:
+    import platform
+
+    if platform.system() != "Darwin" or platform.machine() != "arm64":
+        return False
+    try:
+        import mlx_whisper  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+def choose_model(setting: str) -> tuple[str, str]:
+    """(engine, model) for a JARVIS_WHISPER_MODEL setting. "auto" picks
+    large-v3-turbo on the GPU when mlx-whisper is installed. A name from
+    mlx-community runs with MLX; anything else with faster-whisper."""
+    setting = (setting or "auto").strip()
+    if setting == "auto":
+        return ("mlx", MLX_MODEL) if mlx_available() else ("faster", CPU_MODEL)
+    if setting.startswith("mlx-community/"):
+        return "mlx", setting
+    return "faster", setting
+
+
 class Transcriber:
     """Runs Whisper on this computer, so audio never leaves it."""
 
     def __init__(self):
         self._model = None
+        self.engine, self.model_name = choose_model(config.whisper_model)
         # An interrupted request can still be transcribing when the next one
         # starts; Whisper runs one at a time.
         self._lock = threading.Lock()
 
     def _load(self):
         if self._model is None:
-            from faster_whisper import WhisperModel
+            if self.engine == "mlx":
+                import mlx_whisper
 
-            self._model = WhisperModel(config.whisper_model, device="auto", compute_type="int8")
+                self._model = mlx_whisper
+            else:
+                from faster_whisper import WhisperModel
+
+                self._model = WhisperModel(self.model_name, device="auto", compute_type="int8")
         return self._model
 
     def warm_up(self) -> None:
-        """Loads Whisper in the background so the first request isn't slow."""
-        threading.Thread(target=self._load, daemon=True).start()
+        """Loads Whisper in the background so the first request isn't slow.
+        The first time, that includes downloading the model."""
+
+        def warm():
+            try:
+                with self._lock:
+                    model = self._load()
+                    if self.engine == "mlx":
+                        # MLX loads (and first downloads) the model on first use.
+                        model.transcribe(
+                            np.zeros(config.sample_rate, dtype=np.float32),
+                            path_or_hf_repo=self.model_name,
+                            language=config.language or None,
+                        )
+            except Exception as error:
+                print(f"Couldn't get speech recognition ready: {error}", flush=True)
+
+        threading.Thread(target=warm, daemon=True).start()
 
     def transcribe(self, audio: np.ndarray, vocabulary: str = "") -> str:
         # Anything shorter than a quarter second is a stray key press.
         if audio.size < config.sample_rate // 4:
             return ""
-        # Greedy decoding (beam_size=1) is several times faster than the
-        # default beam search and barely less accurate for short commands.
+        # Names and terms from your dictionary, so Whisper spells them right.
+        prompt = f"Words that may come up: {vocabulary}." if vocabulary else None
+        language = config.language or None
         with self._lock:
-            segments, _ = self._load().transcribe(
+            model = self._load()
+            if self.engine == "mlx":
+                result = model.transcribe(
+                    audio.astype(np.float32),
+                    path_or_hf_repo=self.model_name,
+                    language=language,
+                    initial_prompt=prompt,
+                    condition_on_previous_text=False,
+                )
+                return str(result.get("text", "")).strip()
+            segments, _ = model.transcribe(
                 audio,
-                beam_size=1,
+                # A small beam search: noticeably more accurate than greedy
+                # decoding for a fraction of a second more.
+                beam_size=3,
                 vad_filter=True,
                 condition_on_previous_text=False,
-                # Names and terms from your dictionary, so Whisper spells them right.
-                initial_prompt=f"Words that may come up: {vocabulary}." if vocabulary else None,
+                language=language if not self.model_name.endswith(".en") else None,
+                initial_prompt=prompt,
             )
             return " ".join(s.text.strip() for s in segments).strip()

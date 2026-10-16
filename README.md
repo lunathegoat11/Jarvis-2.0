@@ -116,6 +116,9 @@ Jarvis won't buy anything, send messages, post, delete things or type passwords 
 
 How well this works depends on the model. Claude is built for it and is the most reliable. Open models on NVIDIA or Ollama can do it too, with a coordinate grid drawn on their screenshots to help them aim, but they miss more often. Screen control uses the vision model (`JARVIS_VISION_MODEL`), which has to support both images and tool calling.
 
+
+With Claude, screen control uses Claude's own computer-use tools, which it's trained to aim with, so its clicks land far more reliably. Other providers use Jarvis's simpler screen tools with a coordinate grid.
+
 ## Voice
 
 Out of the box Jarvis speaks with your computer's built-in voice. For a much more natural one, install Kokoro, a free open-source AI voice that runs on your computer:
@@ -141,6 +144,25 @@ Dictation also adapts to the app you're in, so a message in a chat app reads lik
 On a Mac, Jarvis uses the Calendar and Reminders apps, so any account you've added there (iCloud, Google, Exchange) works with no extra setup. Try "what's on my calendar today?", "add dentist on Friday at 3pm" or "remind me to call Mum at 6". Before adding a calendar event Jarvis reads the details back and waits for you to say yes. The first time, macOS asks whether Terminal may control Calendar and Reminders; allow it. New events go in the first calendar you can edit, or set `JARVIS_CALENDAR` to a calendar's name.
 
 Repeating events may not show up when Jarvis checks your calendar, because of a limit in how Calendar answers these requests.
+
+## Browsing the web
+
+On a Mac, Jarvis can browse in your own Safari or Chrome (Brave and Edge too): "find a study guide on plate tectonics and read me the key points", "search YouTube for the latest MrBeast video and play it". It opens real tabs, reads the page, and clicks links and buttons by what they are rather than by guessing at a screenshot, so you stay signed in and can watch it work. Your browser has to allow this once:
+
+- **Safari:** Settings > Advanced > tick **Show features for web developers**, then the **Develop** menu > **Allow JavaScript from Apple Events**.
+- **Chrome:** View > Developer > **Allow JavaScript from Apple Events**.
+
+The first time, macOS also asks whether Terminal (or Jarvis) may control the browser; allow it. Jarvis treats what it reads on web pages as information, never as instructions.
+
+## Hearing you clearly
+
+Jarvis keeps listening for a moment after you let go of the key, so your last word isn't cut off. For much better recognition on an Apple Silicon Mac, install MLX Whisper once:
+
+```
+.venv/bin/pip install mlx-whisper
+```
+
+Jarvis then uses Whisper large-v3-turbo on the Mac's GPU (it downloads about 1.6 GB the first time). Without it, Jarvis uses `small.en`. Set `JARVIS_WHISPER_MODEL` to pick another model (`medium.en`, or any `mlx-community/` Whisper), and `JARVIS_LANGUAGE` if you don't speak English. Adding names and unusual words to your dictionary helps too.
 
 ## Memory, weather, timers and briefings
 

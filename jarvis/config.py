@@ -130,7 +130,12 @@ class Config:
     base_url: str = _setting("JARVIS_BASE_URL", "base_url")
     api_key: str = _api_key()
 
-    whisper_model: str = os.environ.get("JARVIS_WHISPER_MODEL", "base.en")
+    # Speech recognition. "auto" uses Whisper large-v3-turbo on the Mac's GPU
+    # when mlx-whisper is installed, or small.en otherwise. Any faster-whisper
+    # model name (base.en, medium.en, ...) or mlx-community/ model also works.
+    whisper_model: str = os.environ.get("JARVIS_WHISPER_MODEL", "auto")
+    # The language you speak, so Whisper doesn't have to guess. Empty: detect.
+    language: str = os.environ.get("JARVIS_LANGUAGE", "en").strip()
     speak_replies: bool = os.environ.get("JARVIS_SPEAK", "1") == "1"
     # Voice: "kokoro" (natural AI voice, runs locally), "system" (built in),
     # or "auto" (Kokoro when installed). JARVIS_VOICE names the voice, e.g.

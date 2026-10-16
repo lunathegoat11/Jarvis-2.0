@@ -224,6 +224,62 @@ TOOLS += [
 # send them there (see main.py).
 made_documents: list = []
 
+# Driving the user's own browser by reading the page (see browser.py). Much
+# more reliable on websites than clicking on screenshots.
+BROWSER_TOOLS = [
+    {
+        "name": "browse_open",
+        "description": (
+            "Open a web page in the user's browser (Safari or Chrome) and read it: you get "
+            "its text and a numbered list of the links, buttons and boxes on it. new_tab "
+            "false reuses the current tab. Use this, then browse_click and browse_type, to "
+            "get things done on websites."
+        ),
+        "strict": True,
+        "input_schema": _schema(
+            {"url": {"type": "string"}, "new_tab": {"type": "boolean"}}, ["url", "new_tab"]
+        ),
+    },
+    {
+        "name": "browse_read",
+        "description": "Read the page open in the browser now, with its numbered links, buttons and boxes.",
+        "strict": True,
+        "input_schema": _schema({}, []),
+    },
+    {
+        "name": "browse_click",
+        "description": "Click a link or button on the page by its number from the latest read.",
+        "strict": True,
+        "input_schema": _schema({"number": {"type": "integer"}}, ["number"]),
+    },
+    {
+        "name": "browse_type",
+        "description": (
+            "Type into a box on the page by its number, replacing what's there. submit true "
+            "presses Enter afterwards (to search, say)."
+        ),
+        "strict": True,
+        "input_schema": _schema(
+            {"number": {"type": "integer"}, "text": {"type": "string"}, "submit": {"type": "boolean"}},
+            ["number", "text", "submit"],
+        ),
+    },
+    {
+        "name": "browse_scroll",
+        "description": "Scroll the page and read what's now in view.",
+        "strict": True,
+        "input_schema": _schema(
+            {"direction": {"type": "string", "enum": ["down", "up", "top", "bottom"]}}, ["direction"]
+        ),
+    },
+    {
+        "name": "browse_back",
+        "description": "Go back to the previous page in the browser.",
+        "strict": True,
+        "input_schema": _schema({}, []),
+    },
+]
+
 USE_SCREEN_TOOL = {
     "name": "use_screen",
     "description": (
@@ -423,7 +479,7 @@ def command_tools(can_see_screen: bool = True) -> list[dict]:
     if mail.configured():
         tools += EMAIL_TOOLS
     if config.is_mac:
-        tools += CALENDAR_TOOLS
+        tools += CALENDAR_TOOLS + BROWSER_TOOLS
     from . import contact
 
     if contact.configured():
@@ -612,6 +668,21 @@ def run_tool(name: str, args: dict) -> str:
         if name == "list_timers":
             return scheduler.pending()
         return scheduler.cancel(args["which"])
+    if name.startswith("browse_"):
+        from . import browser
+
+        if name == "browse_open":
+            return browser.open_page(args["url"], args["new_tab"])
+        if name == "browse_read":
+            return browser.read_page()
+        if name == "browse_click":
+            return browser.click(args["number"])
+        if name == "browse_type":
+            return browser.type_into(args["number"], args["text"], args["submit"])
+        if name == "browse_scroll":
+            return browser.scroll(args["direction"])
+        if name == "browse_back":
+            return browser.go_back()
     if name == "write_document":
         path = write_document(args["title"], args["content"])
         return f"Saved it as {path.name} in Documents > Jarvis and opened it."

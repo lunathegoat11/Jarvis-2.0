@@ -23,6 +23,9 @@ except ImportError:  # not a Mac, or PyObjC isn't installed
 # Dictation this short is typed as Whisper heard it, without an AI tidy-up.
 SHORT_DICTATION_WORDS = 8
 
+# Seconds of recording kept after the talk key is let go.
+RECORDING_TAIL = 0.3
+
 
 def log(message: str) -> None:
     print(f"[{time.strftime('%H:%M:%S')}] {message}", flush=True)
@@ -133,13 +136,19 @@ class Jarvis:
     def stop(self, mode: str) -> None:
         if not self.recorder.recording or mode != self.mode:
             return
-        audio = self.recorder.stop()
-        log("Stopped listening.")
         self.mode = None
         self.hud.thinking("")
         self._busy = True
         job = self._job
-        threading.Thread(target=self._run_job, args=(mode, audio, job), daemon=True).start()
+        threading.Thread(target=self._finish_recording, args=(mode, job), daemon=True).start()
+
+    def _finish_recording(self, mode: str, job: int) -> None:
+        # People tend to let go of the key just before their last word ends,
+        # so keep listening a moment longer.
+        time.sleep(RECORDING_TAIL)
+        audio = self.recorder.stop()
+        log("Stopped listening.")
+        self._run_job(mode, audio, job)
 
     def cancel(self, mode: str) -> None:
         """Throws the recording away, e.g. when the key was only tapped."""
@@ -398,6 +407,8 @@ class Jarvis:
         voice.warm_up()
         self.transcriber.warm_up()
         print(f"Jarvis is running, using {config.provider} ({self.brain.model}).")
+        print(f"  speech recognition: {self.transcriber.model_name}"
+              + (" on the GPU" if self.transcriber.engine == "mlx" else ""))
         timers.start(self.announce, self.briefing)
         if config.briefing_time:
             print(f"  daily briefing at {config.briefing_time}")
