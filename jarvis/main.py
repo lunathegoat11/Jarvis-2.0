@@ -4,7 +4,7 @@ import threading
 import time
 import traceback
 
-from . import contact, desktop, prefs, quick, remote, router, timers, tools, voice
+from . import contact, desktop, habits, prefs, quick, remote, router, timers, tools, voice
 from .audio import Recorder, Transcriber
 from .brain import make_brain
 from . import config as settings
@@ -66,6 +66,15 @@ def acquire_single_instance(wait_seconds: float = 3.0) -> bool:
             time.sleep(0.25)
 
 
+def learn_habit(text: str, calls: list) -> None:
+    """Notes a finished request so Jarvis can learn habits. Never gets in
+    the way of the request itself."""
+    try:
+        habits.record(text, calls)
+    except Exception as error:
+        log(f"Couldn't note that for habits: {error}")
+
+
 def chime() -> None:
     """A short sound before Jarvis speaks up on its own."""
     if not config.is_mac:
@@ -99,6 +108,8 @@ class Jarvis:
         # key again bumps the number, and older requests go quiet.
         self._job = 0
         self._busy = False
+        # A habit Jarvis just offered: saying "yes" soon after does it.
+        self.offer: dict | None = None
 
     def interrupt(self) -> None:
         """Stops everything Jarvis is doing so a new request can start."""
@@ -204,6 +215,11 @@ class Jarvis:
             self.hud.flash("Didn't catch that")
             return
         log(f"Heard: {text!r} ({time.monotonic() - started:.1f}s)")
+        offer = getattr(self, "offer", None)
+        if offer and time.monotonic() < offer["until"] and habits.is_yes(text):
+            log(f"Yes to the offer: {offer['said']!r}")
+            text, mode = offer["said"], "command"
+        self.offer = None
         if mode == "auto":
             mode, text = router.route(text)
             log(f"Treating that as: {mode}")
@@ -248,6 +264,7 @@ class Jarvis:
             stream = voice.SpeechStream(on_start=lambda: self.hud.speaking(True))
         on_text = stream.feed if stream else None
         try:
+            calls: list = []
             if mode == "ask":
                 log(f"Asking {self.brain.vision_model} about the screen...")
                 shot = desktop.screenshot_png_base64(config.screenshot_width)
@@ -257,13 +274,16 @@ class Jarvis:
                 if quick_command:
                     log(f"Quick command: {quick_command.action}")
                     reply = quick.run(quick_command)
+                    calls = [(quick_command.action, quick_command.args)]
                 else:
                     log(f"Asking {self.brain.model}...")
                     reply = self.brain.run_command(text, on_text=on_text)
+                    calls = list(getattr(self.brain, "last_calls", []))
             if not current():
                 log("(Dropped the reply to an interrupted request.)")
                 return
             log(f"Reply: {reply!r} ({time.monotonic() - asked_at:.1f}s)")
+            learn_habit(text, calls)
             shown = voice.clean_for_speech(reply, keep_links=True)
             self.hud.reply(shown, heard=text)
             if stream:
@@ -285,7 +305,21 @@ class Jarvis:
             if stream:
                 stream.finish(wait=False)
 
-    def announce(self, text: str) -> None:
+    def offer_habit(self) -> None:
+        """Called each minute: offers to do something the user usually asks
+        for around now (see habits.py)."""
+        if not config.habit_suggestions or self._busy or self.recorder.recording:
+            return
+        habit = habits.due_suggestion()
+        if habit is None:
+            return
+        self.offer = {"said": habit["said"], "until": time.monotonic() + 180}
+        self.announce(
+            f'You usually ask me "{habit["said"]}" around now. Want me to? Just say yes.',
+            to_phone=False,
+        )
+
+    def announce(self, text: str, to_phone: bool = True) -> None:
         """Says a timer, reminder or briefing out loud (after a chime), shows
         it in the notch, and sends it to the phone when ntfy is set up."""
         log(f"Announcing: {text!r}")
@@ -295,7 +329,7 @@ class Jarvis:
             deadline = time.monotonic() + 90
             while (self._busy or self.recorder.recording) and time.monotonic() < deadline:
                 time.sleep(0.5)
-            if config.alerts_to_phone and contact.ntfy_configured():
+            if to_phone and config.alerts_to_phone and contact.ntfy_configured():
                 try:
                     contact.text_me(text)
                 except Exception as error:
@@ -369,6 +403,11 @@ class Jarvis:
             if not current():
                 return
             log(f"Reply: {reply!r}")
+            learn_habit(
+                text,
+                [(quick_command.action, quick_command.args)] if quick_command
+                else list(getattr(self.brain, "last_calls", [])),
+            )
             shown = voice.clean_for_speech(reply, keep_links=True)
             self.hud.reply(shown, heard=text)
             self.hud.hide(after=reply_seconds(shown))
@@ -409,7 +448,7 @@ class Jarvis:
         print(f"Jarvis is running, using {config.provider} ({self.brain.model}).")
         print(f"  speech recognition: {self.transcriber.model_name}"
               + (" on the GPU" if self.transcriber.engine == "mlx" else ""))
-        timers.start(self.announce, self.briefing)
+        timers.start(self.announce, self.briefing, every_minute=self.offer_habit)
         if config.briefing_time:
             print(f"  daily briefing at {config.briefing_time}")
         if remote.configured():

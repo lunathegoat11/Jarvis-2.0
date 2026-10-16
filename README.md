@@ -176,6 +176,16 @@ Say "good morning" or "brief me" for a short rundown of the weather, today's cal
 
 Replies are spoken as they're written: Jarvis starts talking after the first sentence instead of waiting for the whole answer.
 
+## Learning
+
+Jarvis gets better the more you use it, in three ways, all saved on your Mac:
+
+- **From your corrections.** Say "no, I meant Chrome" or "that's wrong, my teacher is Mr. Lee" and Jarvis fixes it, then saves a lesson so it doesn't happen again. If it misheard a name, it adds it to your dictionary.
+- **From tasks that worked.** After a multi-step task goes well (playing a video, finding something on a site), it saves the steps as a skill and reuses them next time, so repeat tasks get quicker.
+- **From your habits.** It notes what you ask and when, in `~/.jarvis/activity.jsonl`. Something you ask for at about the same time on three or more days becomes a habit, and around that time Jarvis offers to do it ("You usually ask me what's the weather around now. Want me to?"). Just say "yes". "Stop suggesting the weather" turns one off, and `JARVIS_HABIT_SUGGESTIONS=0` turns them all off.
+
+Lessons and skills live in `~/.jarvis/memory.json` with the facts Jarvis remembers about you. "Forget ..." removes any of them.
+
 ## Texting and calling you
 
 Jarvis can send you a text or ring your phone when you ask ("text me the address", "call me in five minutes", "text me when it's done"). Put your number in the app's settings (the gear) under **Your phone number**, or set `JARVIS_MY_NUMBER` in `.env`.

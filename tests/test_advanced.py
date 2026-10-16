@@ -339,7 +339,7 @@ def _jarvis_for(monkeypatch, brain_obj, quick_reply=None):
     monkeypatch.setattr(main.router, "route", lambda text: ("command", text))
     monkeypatch.setattr(main.prefs, "get", lambda key, default=None: True if key == "speak_replies" else "")
     monkeypatch.setattr(
-        main.quick, "match", lambda text: types.SimpleNamespace(action="x") if quick_reply else None
+        main.quick, "match", lambda text: types.SimpleNamespace(action="x", args={}) if quick_reply else None
     )
     monkeypatch.setattr(main.quick, "run", lambda q: quick_reply)
     streamed, spoken_whole = [], []

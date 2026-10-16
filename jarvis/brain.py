@@ -82,7 +82,14 @@ you'll say out loud at the time. When the user asks for a briefing or says \
 good morning, give a short spoken rundown: the weather where they live, \
 today's calendar events, unread email worth knowing about, today's timers and \
 reminders, and two or three headlines. Skip anything you can't check, and \
-keep it to about six sentences."""
+keep it to about six sentences.
+
+You learn as you go. When the user corrects you ("no, I meant...", "that's \
+wrong", "not that one"), fix it, then save a lesson with learn_lesson so it \
+doesn't happen again; if you misheard a name or word, also add it with \
+add_to_dictionary. After a task that took several steps works, save the steps \
+with save_skill. Don't mention saving unless asked. If the user says yes to a \
+habit you offered, just do it."""
 
 WEB_SEARCH_HINT = " Search the web when a question needs current information."
 
@@ -172,6 +179,7 @@ class Brain:
 
     def __init__(self):
         self._command_history: list = []
+        self.last_calls: list = []
         self._last_command_at = 0.0
         self.hud = _QuietHUD()
         # Set (by pressing Esc) to stop screen control between steps.
@@ -220,9 +228,9 @@ class Brain:
     COMMAND_HINT = ""
 
     def _command_system(self) -> str:
-        from . import memory
+        from . import habits, memory
 
-        return COMMAND_SYSTEM + self.COMMAND_HINT + memory.prompt_section()
+        return COMMAND_SYSTEM + self.COMMAND_HINT + memory.prompt_section() + habits.prompt_section()
 
     # ---- shared behaviour ---------------------------------------------------
 
@@ -295,6 +303,8 @@ class Brain:
     def run_command(self, command: str, on_text=None) -> str:
         history = self._start_command(command)
         tools = self._command_tools()
+        # What this command did, for learning habits (see habits.py).
+        self.last_calls = []
 
         for _ in range(MAX_TOOL_ROUNDS):
             step = self._step(
@@ -307,6 +317,7 @@ class Brain:
                 return REFUSAL_REPLY
             if not step.calls:
                 return step.text or EMPTY_REPLY
+            self.last_calls += [(call.name, call.args or {}) for call in step.calls]
             results = [(call, *self._run_command_tool(call)) for call in step.calls]
             history.extend(self._results(results))
 

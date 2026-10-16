@@ -147,8 +147,8 @@ TOOLS += [
     {
         "name": "forget",
         "description": (
-            "Delete saved facts about the user. Every fact containing the given words is "
-            "removed, so quote the part that identifies it."
+            "Delete saved facts, lessons or skills. Everything containing the given words "
+            "is removed, so quote the part that identifies it."
         ),
         "strict": True,
         "input_schema": _schema({"about": {"type": "string"}}, ["about"]),
@@ -217,6 +217,51 @@ TOOLS += [
         ),
         "strict": True,
         "input_schema": _schema({"which": {"type": "string"}}, ["which"]),
+    },
+]
+
+# Learning from corrections, from tasks that worked, and from habits.
+TOOLS += [
+    {
+        "name": "learn_lesson",
+        "description": (
+            "Save a lesson when the user corrects you or says you got something wrong, so "
+            "you don't repeat it: a short rule for next time, e.g. 'When the user says \"my "
+            "email\" they mean Gmail in Chrome, not the Mail app'."
+        ),
+        "strict": True,
+        "input_schema": _schema({"lesson": {"type": "string"}}, ["lesson"]),
+    },
+    {
+        "name": "save_skill",
+        "description": (
+            "After finishing a task that took several steps (especially on a website or the "
+            "screen), save the steps that worked so next time is quicker. task is a general "
+            "name ('play a YouTube video'); steps are short numbered steps naming the tools "
+            "and what to look for, with the request-specific parts as <placeholders>. "
+            "Saving the same task again replaces its steps."
+        ),
+        "strict": True,
+        "input_schema": _schema(
+            {"task": {"type": "string"}, "steps": {"type": "string"}}, ["task", "steps"]
+        ),
+    },
+    {
+        "name": "add_to_dictionary",
+        "description": (
+            "Add names or words to the user's speech dictionary so they're heard and spelled "
+            "right from now on. Use it when the user corrects how you heard or spelled one."
+        ),
+        "strict": True,
+        "input_schema": _schema(
+            {"words": {"type": "array", "items": {"type": "string"}}}, ["words"]
+        ),
+    },
+    {
+        "name": "stop_suggesting",
+        "description": "Stop offering a habit you noticed, named by words in it ('weather').",
+        "strict": True,
+        "input_schema": _schema({"about": {"type": "string"}}, ["about"]),
     },
 ]
 
@@ -645,10 +690,25 @@ def run_tool(name: str, args: dict) -> str:
         if not notes:
             return "No notes saved yet."
         return "\n".join(f"{n['time']}: {n['text']}" for n in notes)
-    if name in ("remember", "forget"):
+    if name in ("remember", "forget", "learn_lesson", "save_skill"):
         from . import memory
 
-        return memory.remember(args["fact"]) if name == "remember" else memory.forget(args["about"])
+        if name == "remember":
+            return memory.remember(args["fact"])
+        if name == "learn_lesson":
+            return memory.remember(args["lesson"], kind="lesson")
+        if name == "save_skill":
+            return memory.save_skill(args["task"], args["steps"])
+        return memory.forget(args["about"])
+    if name == "add_to_dictionary":
+        from . import prefs
+
+        prefs.add_words(args["words"])
+        return "Added to the dictionary."
+    if name == "stop_suggesting":
+        from . import habits
+
+        return habits.stop_suggesting(args["about"])
     if name == "get_weather":
         from . import info
 

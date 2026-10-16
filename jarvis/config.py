@@ -177,6 +177,8 @@ class Config:
     briefing_time: str = _first("JARVIS_BRIEFING_TIME")
     # Timers, reminders and briefings also go to your phone when ntfy is set up.
     alerts_to_phone: bool = os.environ.get("JARVIS_ALERTS_TO_PHONE", "1") == "1"
+    # Offer to do things you usually ask for at about this time of day.
+    habit_suggestions: bool = os.environ.get("JARVIS_HABIT_SUGGESTIONS", "1") == "1"
 
     # Which calendar new events go in; empty means the first one you can edit.
     calendar_name: str = os.environ.get("JARVIS_CALENDAR", "")

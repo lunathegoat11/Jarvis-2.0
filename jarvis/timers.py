@@ -33,9 +33,12 @@ def _describe_duration(seconds: int) -> str:
 
 
 class Scheduler:
-    def __init__(self, announce, briefing=None, path=None, clock=time.time, now=datetime.now):
+    def __init__(self, announce, briefing=None, path=None, clock=time.time, now=datetime.now,
+                 every_minute=None):
         self.announce = announce  # called with the words to say
         self.briefing = briefing  # called with no arguments at briefing time
+        self.every_minute = every_minute  # e.g. offering habits
+        self._last_minute = 0.0
         self.path = path or config.data_dir / "timers.json"
         self.clock = clock
         self.now = now
@@ -144,6 +147,9 @@ class Scheduler:
                 message += f" (This was due at {late}.)"
             self.announce(message)
         self._maybe_brief()
+        if self.every_minute and now - self._last_minute >= 60:
+            self._last_minute = now
+            self.every_minute()
 
     def _maybe_brief(self) -> None:
         if not (self.briefing and config.briefing_time):
@@ -181,9 +187,9 @@ class Scheduler:
 _scheduler: Scheduler | None = None
 
 
-def start(announce, briefing=None) -> Scheduler:
+def start(announce, briefing=None, every_minute=None) -> Scheduler:
     global _scheduler
-    _scheduler = Scheduler(announce, briefing)
+    _scheduler = Scheduler(announce, briefing, every_minute=every_minute)
     _scheduler.start()
     return _scheduler
 
