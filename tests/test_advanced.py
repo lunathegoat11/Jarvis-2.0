@@ -369,3 +369,27 @@ def test_a_reply_that_wasnt_streamed_is_still_spoken(monkeypatch):
     jarvis, audio, streamed, whole = _jarvis_for(monkeypatch, object(), quick_reply="Opened Safari.")
     jarvis.handle("auto", audio)
     assert streamed == [] and whole == ["Opened Safari."]
+
+
+def test_claude_gets_at_most_20_strict_tools(monkeypatch):
+    # Claude rejected the request: "Too many strict tools (33). The maximum
+    # number of strict tools supported is 20."
+    every_tool = (
+        tools.TOOLS + tools.EMAIL_TOOLS + tools.CALENDAR_TOOLS + tools.CONTACT_TOOLS
+        + tools.DEVICE_TOOLS + tools.HOME_ASSISTANT_TOOLS
+        + [tools.LOOK_AT_SCREEN_TOOL, tools.USE_SCREEN_TOOL, tools.WEB_SEARCH_TOOL]
+    )
+    assert sum(1 for t in every_tool if t.get("strict")) > 20
+    asked = []
+    fake = brain.AnthropicBrain.__new__(brain.AnthropicBrain)
+    fake._create = lambda **kw: asked.append(kw) or types.SimpleNamespace(
+        content=[], stop_reason="end_turn"
+    )
+    fake._step("system", [], every_tool, "claude-sonnet-5-5", "medium")
+    sent = asked[0]["tools"]
+    assert len(sent) == len(every_tool)  # every tool is still offered
+    assert sum(1 for t in sent if t.get("strict")) == 20
+    # Tools without inputs are the first to lose strict mode.
+    assert not any(t.get("strict") for t in sent if t["name"] in ("read_clipboard", "list_notes"))
+    # The originals aren't changed, so other providers see them as before.
+    assert all(t.get("strict") for t in tools.TOOLS)

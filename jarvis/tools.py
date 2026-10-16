@@ -439,6 +439,25 @@ def command_tools(can_see_screen: bool = True) -> list[dict]:
     return tools
 
 
+# Claude accepts at most this many tools in strict mode per request.
+MAX_STRICT_TOOLS = 20
+
+
+def limit_strict(tools: list[dict], limit: int = MAX_STRICT_TOOLS) -> list[dict]:
+    """Takes strict mode off tools beyond the limit. Tools with no inputs gain
+    nothing from it, so they lose it first; after that, the tools listed
+    earliest keep it. The rest still work, just without the guarantee."""
+    strict = [t for t in tools if t.get("strict")]
+    if len(strict) <= limit:
+        return tools
+    with_inputs = [t for t in strict if t.get("input_schema", {}).get("properties")]
+    keep = {id(t) for t in (with_inputs + [t for t in strict if t not in with_inputs])[:limit]}
+    return [
+        t if not t.get("strict") or id(t) in keep else {k: v for k, v in t.items() if k != "strict"}
+        for t in tools
+    ]
+
+
 def to_openai(tools: list[dict]) -> list[dict]:
     """Converts tools to the OpenAI chat-completions format that NVIDIA,
     Ollama and others use. "strict" is left out because not every provider

@@ -17,7 +17,7 @@ from datetime import datetime
 
 from . import config as settings
 from .config import config
-from .tools import WEB_SEARCH_TOOL, command_tools, run_tool, to_openai
+from .tools import WEB_SEARCH_TOOL, command_tools, limit_strict, run_tool, to_openai
 
 DICTATE_SYSTEM = """\
 You clean up dictated speech so it can be pasted straight into a document, \
@@ -404,7 +404,7 @@ class AnthropicBrain(Brain):
     def _step(self, system, messages, tools, model, effort, on_text=None) -> Step:
         kwargs = {}
         if tools:
-            kwargs["tools"] = tools
+            kwargs["tools"] = limit_strict(tools)
         request = dict(
             model=model,
             system=system,
