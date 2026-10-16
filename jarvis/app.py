@@ -4,6 +4,9 @@ settings. It also adds a menu-bar icon for opening the window and quitting.
 The window is a WKWebView showing app.html. Python sends it events with
 send(); the page sends settings changes back through a script message
 handler named "jarvis". Everything here runs on the main thread.
+
+While the window exists, Jarvis is a regular app: it has a Dock icon, shows
+up in Cmd-Tab, and switching to it brings the window back.
 """
 
 import json
@@ -13,6 +16,7 @@ from pathlib import Path
 import objc
 from AppKit import (
     NSApplication,
+    NSApplicationActivationPolicyRegular,
     NSBackingStoreBuffered,
     NSColor,
     NSMakeRect,
@@ -30,6 +34,9 @@ from . import prefs, voice
 from .config import config
 
 HTML = Path(__file__).with_name("app.html")
+# The downloadable app has its icon built in; running from the source folder,
+# Python's rocket would show in the Dock and Cmd-Tab instead.
+ICON = Path(__file__).resolve().parent.parent / "packaging" / "icon.png"
 
 # NSWindowStyleMask: titled, closable, miniaturizable, resizable.
 WINDOW_STYLE = 1 | 2 | 4 | 8
@@ -66,6 +73,65 @@ class _MenuTarget(NSObject):
 
     def quit_(self, sender):
         NSApplication.sharedApplication().terminate_(None)
+
+
+class _AppDelegate(NSObject):
+    """Brings the window back when you switch to Jarvis with Cmd-Tab or click
+    its Dock icon, even after the window was closed."""
+
+    def initWithApp_(self, app):
+        self = objc.super(_AppDelegate, self).init()
+        if self is None:
+            return None
+        self.app = app
+        return self
+
+    def applicationDidBecomeActive_(self, notification):
+        if not self.app.window.isVisible():
+            self.app.window.makeKeyAndOrderFront_(None)
+
+    def applicationShouldHandleReopen_hasVisibleWindows_(self, application, has_visible):
+        self.app.window.makeKeyAndOrderFront_(None)
+        return True
+
+    def applicationShouldTerminateAfterLastWindowClosed_(self, application):
+        return False  # closing the window leaves Jarvis listening
+
+
+def _main_menu(target) -> NSMenu:
+    """A regular app needs a menu bar. The Edit menu also makes Cmd-C/V/X/A
+    work in the window's text boxes."""
+    main = NSMenu.alloc().init()
+
+    def submenu(title, items):
+        holder = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(title, None, "")
+        menu = NSMenu.alloc().initWithTitle_(title)
+        for item_title, action, key, item_target in items:
+            item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(item_title, action, key)
+            if item_target is not None:
+                item.setTarget_(item_target)
+            menu.addItem_(item)
+        holder.setSubmenu_(menu)
+        main.addItem_(holder)
+
+    submenu("Jarvis", [
+        ("Hide Jarvis", "hide:", "h", None),
+        ("Quit Jarvis", "quit:", "q", target),
+    ])
+    # A target of None sends these to whichever text box has focus.
+    submenu("Edit", [
+        ("Undo", "undo:", "z", None),
+        ("Redo", "redo:", "Z", None),
+        ("Cut", "cut:", "x", None),
+        ("Copy", "copy:", "c", None),
+        ("Paste", "paste:", "v", None),
+        ("Select All", "selectAll:", "a", None),
+    ])
+    submenu("Window", [
+        ("Close", "performClose:", "w", None),
+        ("Minimize", "performMiniaturize:", "m", None),
+    ])
+    return main
 
 
 class JarvisApp:
@@ -105,6 +171,20 @@ class JarvisApp:
         self.webview.loadHTMLString_baseURL_(HTML.read_text(), None)
 
         self._build_menu_bar_icon()
+        self._become_regular_app()
+
+    def _become_regular_app(self):
+        app = NSApplication.sharedApplication()
+        app.setActivationPolicy_(NSApplicationActivationPolicyRegular)
+        app.setMainMenu_(_main_menu(self.menu_target))
+        self.delegate = _AppDelegate.alloc().initWithApp_(self)  # AppKit holds it weakly
+        app.setDelegate_(self.delegate)
+        if ICON.exists():
+            from AppKit import NSImage
+
+            image = NSImage.alloc().initWithContentsOfFile_(str(ICON))
+            if image is not None:
+                app.setApplicationIconImage_(image)
 
     def _build_menu_bar_icon(self):
         self.menu_target = _MenuTarget.alloc().initWithApp_(self)

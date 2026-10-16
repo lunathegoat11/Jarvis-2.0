@@ -65,6 +65,9 @@ def run_setup_window(problem: str) -> None:
 
     from .app import JarvisApp
 
+    from .notch import _name_the_app
+
+    _name_the_app()
     app = NSApplication.sharedApplication()
     app.setActivationPolicy_(NSApplicationActivationPolicyRegular)
     window = JarvisApp({"provider": "", "model": "", "vision_model": "", "setup": problem})

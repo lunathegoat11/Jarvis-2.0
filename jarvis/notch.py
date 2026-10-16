@@ -134,10 +134,27 @@ def _rect(frame):
     return NSMakeRect(*frame)
 
 
+def _name_the_app() -> None:
+    """Run from the source folder, macOS would call Jarvis "Python" in the
+    menu bar and Cmd-Tab. Renaming the bundle before the app starts fixes
+    the menu bar, and usually the switcher too."""
+    try:
+        from Foundation import NSBundle
+
+        bundle = NSBundle.mainBundle()
+        info = bundle.localizedInfoDictionary() or bundle.infoDictionary()
+        if info is not None and info.get("CFBundleName") != "Jarvis":
+            info["CFBundleName"] = "Jarvis"
+    except Exception:
+        pass
+
+
 class NotchHUD:
     def __init__(self):
+        _name_the_app()
         self.app = NSApplication.sharedApplication()
-        # No Dock icon and no menu bar; Jarvis lives in the notch.
+        # No Dock icon and no menu bar; Jarvis lives in the notch. The app
+        # window, if it's on, makes Jarvis a regular app (see app.py).
         self.app.setActivationPolicy_(NSApplicationActivationPolicyAccessory)
 
         self._level: Callable[[], float] = lambda: 0.0
