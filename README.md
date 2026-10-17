@@ -204,7 +204,7 @@ The robot is only the body. Its Pi is too small to recognise speech or speak in 
 **On the robot**, after the build guide's hardware steps (I2C on, Crickit firmware, speaker installer, mute trace cut), copy the `robot` folder to the Pi and run:
 
 ```
-bash ~/Jarvis-2.0/robot/setup.sh
+bash ~/robot/setup.sh
 ```
 
 It installs the body server, starts it on every boot, and prints two lines to add to `~/.jarvis-nano/.env` on your computer: the robot's address (`JARVIS_NANO_ROBOT`) and its token (`JARVIS_NANO_TOKEN`).

@@ -17,7 +17,7 @@ if [ ! -f "$TOKEN_FILE" ]; then
 fi
 TOKEN=$(cat "$TOKEN_FILE")
 
-sed -e "s|USER|$USER|g" -e "s|TOKEN|$TOKEN|g" jarvisbot.service | sudo tee /etc/systemd/system/jarvisbot.service > /dev/null
+sed -e "s|@USER@|$USER|g" -e "s|@FOLDER@|$(pwd)|g" -e "s|@TOKEN@|$TOKEN|g" jarvisbot.service | sudo tee /etc/systemd/system/jarvisbot.service > /dev/null
 sudo systemctl daemon-reload
 sudo systemctl enable --now jarvisbot
 

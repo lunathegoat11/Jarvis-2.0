@@ -1,15 +1,15 @@
 # Starts the robot's body server at boot. Install with robot/setup.sh, or copy
-# to /etc/systemd/system/ after replacing USER and TOKEN.
+# to /etc/systemd/system/ after replacing @USER@, @FOLDER@ and @TOKEN@.
 [Unit]
 Description=Jarvis Nano body server
 After=network-online.target sound.target
 Wants=network-online.target
 
 [Service]
-User=USER
-WorkingDirectory=/home/USER/Jarvis-2.0/robot
-Environment=BOT_TOKEN=TOKEN
-ExecStart=/home/USER/Jarvis-2.0/robot/env/bin/uvicorn body_server:app --host 0.0.0.0 --port 8080
+User=@USER@
+WorkingDirectory=@FOLDER@
+Environment=BOT_TOKEN=@TOKEN@
+ExecStart=@FOLDER@/env/bin/uvicorn body_server:app --host 0.0.0.0 --port 8080
 Restart=always
 RestartSec=3
 
