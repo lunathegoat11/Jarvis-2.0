@@ -197,6 +197,10 @@ class Config:
     # run as commands (Mac only, needs Full Disk Access). 0 turns it off.
     imessage_commands: bool = os.environ.get("JARVIS_IMESSAGE", "1") == "1"
     imessage_trigger: str = os.environ.get("JARVIS_IMESSAGE_TRIGGER", "jarvis").strip() or "jarvis"
+    # How to answer messages sent from the phone through ntfy: "imessage"
+    # texts the answer to your number; empty answers the way texts usually
+    # go (an ntfy notification when that's set up).
+    phone_replies: str = os.environ.get("JARVIS_PHONE_REPLIES", "").strip().lower()
     # Twilio's own names (TWILIO_ACCOUNT_SID, ...) work too.
     twilio_sid: str = _first("TWILIO_SID", "TWILIO_ACCOUNT_SID")
     twilio_token: str = _first("TWILIO_TOKEN", "TWILIO_AUTH_TOKEN")

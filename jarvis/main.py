@@ -68,13 +68,23 @@ def acquire_single_instance(wait_seconds: float = 3.0) -> bool:
 
 class PhoneReplies:
     """Answers a message from the phone through ntfy (or however text_me
-    reaches the user)."""
+    reaches the user), or by iMessage with JARVIS_PHONE_REPLIES=imessage."""
+
+    def __init__(self):
+        me = contact.my_number()
+        self.by_imessage = IMessageReplies(me) if config.phone_replies == "imessage" and me else None
 
     def text(self, message: str) -> None:
-        contact.text_me(message)
+        if self.by_imessage:
+            self.by_imessage.text(message)
+        else:
+            contact.text_me(message)
 
     def file(self, path, message: str) -> None:
-        contact.send_file(path, message)
+        if self.by_imessage:
+            self.by_imessage.file(path, message)
+        else:
+            contact.send_file(path, message)
 
 
 class IMessageReplies:

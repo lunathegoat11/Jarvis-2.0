@@ -162,3 +162,20 @@ def test_imessage_commands_are_answered_by_imessage(monkeypatch):
     monkeypatch.setattr(main.quick, "match", lambda text: None)
     jarvis._run_phone_job("what's the weather?", 1, main.IMessageReplies(ME))
     assert sent == [(ME, imessage.REPLY_MARK + "It's 54 degrees.")]
+
+
+def test_ntfy_messages_can_be_answered_by_imessage(monkeypatch):
+    from jarvis import main
+    from jarvis.config import Config
+
+    sent, pushed = [], []
+    monkeypatch.setattr(main, "config", Config(phone_replies="imessage"))
+    monkeypatch.setattr(main.contact, "my_number", lambda: ME)
+    monkeypatch.setattr(main.contact, "text_me", pushed.append)
+    monkeypatch.setattr(main.imessage, "send", lambda to, text: sent.append((to, text)))
+    main.PhoneReplies().text("It's 54 degrees.")
+    assert sent == [(ME, imessage.REPLY_MARK + "It's 54 degrees.")] and pushed == []
+    # Without the setting, answers go the usual way.
+    monkeypatch.setattr(main, "config", Config(phone_replies=""))
+    main.PhoneReplies().text("Hi.")
+    assert pushed == ["Hi."]
