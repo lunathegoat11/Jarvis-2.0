@@ -325,6 +325,36 @@ BROWSER_TOOLS = [
     },
 ]
 
+# The user's iMessages (see imessage.py).
+MESSAGE_TOOLS = [
+    {
+        "name": "read_messages",
+        "description": (
+            "Read the user's recent iMessages and texts, newest last. who is a name from "
+            "their contacts, a phone number or an email, or an empty string for all "
+            "conversations. count is how many messages (up to 50)."
+        ),
+        "strict": True,
+        "input_schema": _schema(
+            {"who": {"type": "string"}, "count": {"type": "integer"}}, ["who", "count"]
+        ),
+    },
+    {
+        "name": "send_message",
+        "description": (
+            "Send an iMessage from the user to someone else: a name from their contacts, a "
+            "number or an email. First read back who it's going to and exactly what it says, "
+            "and ask the user to confirm; only call this with confirmed=true after they've "
+            "said yes in this conversation. To message the user themselves, use text_me."
+        ),
+        "strict": True,
+        "input_schema": _schema(
+            {"to": {"type": "string"}, "text": {"type": "string"}, "confirmed": {"type": "boolean"}},
+            ["to", "text", "confirmed"],
+        ),
+    },
+]
+
 USE_SCREEN_TOOL = {
     "name": "use_screen",
     "description": (
@@ -524,7 +554,7 @@ def command_tools(can_see_screen: bool = True) -> list[dict]:
     if mail.configured():
         tools += EMAIL_TOOLS
     if config.is_mac:
-        tools += CALENDAR_TOOLS + BROWSER_TOOLS
+        tools += CALENDAR_TOOLS + BROWSER_TOOLS + MESSAGE_TOOLS
     from . import contact
 
     if contact.configured():
@@ -728,6 +758,16 @@ def run_tool(name: str, args: dict) -> str:
         if name == "list_timers":
             return scheduler.pending()
         return scheduler.cancel(args["which"])
+    if name == "read_messages":
+        from . import imessage
+
+        return imessage.read(args["who"], args["count"])
+    if name == "send_message":
+        if not args["confirmed"]:
+            return "Not sent. Read back who it's to and what it says, and ask the user to confirm."
+        from . import imessage
+
+        return imessage.send(args["to"], args["text"])
     if name.startswith("browse_"):
         from . import browser
 

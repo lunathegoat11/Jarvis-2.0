@@ -4,7 +4,7 @@ import threading
 import time
 import traceback
 
-from . import contact, desktop, habits, prefs, quick, remote, router, timers, tools, voice
+from . import contact, desktop, habits, imessage, prefs, quick, remote, router, timers, tools, voice
 from .audio import Recorder, Transcriber
 from .brain import make_brain
 from . import config as settings
@@ -64,6 +64,32 @@ def acquire_single_instance(wait_seconds: float = 3.0) -> bool:
                 lock_file.close()
                 return False
             time.sleep(0.25)
+
+
+class PhoneReplies:
+    """Answers a message from the phone through ntfy (or however text_me
+    reaches the user)."""
+
+    def text(self, message: str) -> None:
+        contact.text_me(message)
+
+    def file(self, path, message: str) -> None:
+        contact.send_file(path, message)
+
+
+class IMessageReplies:
+    """Answers a message the user texted Jarvis over iMessage, in the same
+    conversation."""
+
+    def __init__(self, me: str):
+        self.me = me
+
+    def text(self, message: str) -> None:
+        imessage.send(self.me, imessage.REPLY_MARK + message)
+
+    def file(self, path, message: str) -> None:
+        imessage.send_file(self.me, path)
+        self.text(message)
 
 
 def learn_habit(text: str, calls: list) -> None:
@@ -372,17 +398,18 @@ class Jarvis:
 
         threading.Thread(target=run, daemon=True).start()
 
-    def phone_message(self, text: str) -> None:
-        """A message typed on the phone (see remote.py): run it like a spoken
-        command and send the answer back to the phone."""
+    def phone_message(self, text: str, replies=None) -> None:
+        """A message from the phone (ntfy, see remote.py, or iMessage, see
+        imessage.py): run it like a spoken command and answer the same way."""
         log(f"From your phone: {text!r}")
         self.interrupt()
         self._busy = True
         job = self._job
-        threading.Thread(target=self._run_phone_job, args=(text, job), daemon=True).start()
+        threading.Thread(target=self._run_phone_job, args=(text, job, replies), daemon=True).start()
 
-    def _run_phone_job(self, text: str, job: int) -> None:
+    def _run_phone_job(self, text: str, job: int, replies=None) -> None:
         current = lambda: self._current(job)  # noqa: E731
+        replies = replies or PhoneReplies()
         documents_before = len(tools.made_documents)
         try:
             self.hud.thinking(text)
@@ -414,16 +441,16 @@ class Jarvis:
             documents = tools.made_documents[documents_before:]
             if documents:
                 for document in documents:
-                    contact.send_file(document, shown)
+                    replies.file(document, shown)
             else:
-                contact.text_me(shown)
+                replies.text(shown)
         except Exception as error:
             log("A message from your phone failed:")
             traceback.print_exc()
             if current():
                 self.hud.error(str(error))
             try:
-                contact.text_me(f"That didn't work: {error}")
+                replies.text(f"That didn't work: {error}")
             except Exception:
                 pass
         finally:
@@ -451,6 +478,17 @@ class Jarvis:
         timers.start(self.announce, self.briefing, every_minute=self.offer_habit)
         if config.briefing_time:
             print(f"  daily briefing at {config.briefing_time}")
+        me = contact.my_number()
+        if imessage.configured() and me:
+            try:
+                replies = IMessageReplies(me)
+                imessage.start(
+                    me, lambda text: self.phone_message(text, replies), config.imessage_trigger, log=log
+                )
+                trigger = config.imessage_trigger.capitalize()
+                print(f'  text yourself "{trigger}, ..." on iMessage to give Jarvis a command')
+            except Exception as error:
+                print(f"  iMessage commands are off: {error}")
         if remote.configured():
             remote.listen(self.phone_message, log=log)
             print("  messages from your phone are on (ntfy)")
