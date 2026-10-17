@@ -177,3 +177,50 @@ def test_offering_a_habit_and_saying_yes_does_it(monkeypatch):
     assert commands == ["what's the weather"]
     assert jarvis.offer is None
     assert habits._entries()[-1]["did"] == "get_weather"
+
+
+# ---- keeping each conversation's instructions fixed ----------------------------------------
+
+
+def _recording_brain():
+    sent = []
+    fake = brain.Brain.__new__(brain.Brain)
+    brain.Brain.__init__(fake)
+    fake.model = fake.vision_model = "m"
+    fake._user = lambda text, image=None: [{"role": "user", "content": text}]
+    fake._results = lambda results, image=None, note="": []
+
+    def step(system, messages, tools_, model, effort, on_text=None):
+        sent.append((system, [t["name"] for t in tools_ if "name" in t]))
+        return brain.Step(text="Done.", calls=[], assistant={"role": "assistant", "content": "Done."})
+
+    fake._step = step
+    return fake, sent
+
+
+def test_instructions_stay_the_same_for_a_whole_conversation(monkeypatch):
+    # Claude rejected the second command of a conversation ("Invalid
+    # signature in thinking block ... The system prompt differs") because a
+    # memory or habit saved in between changed the instructions.
+    fake, sent = _recording_brain()
+    fake.run_command("hi")
+    memory.remember("Has a geography test on Friday")
+    habits.record("what's the weather", [("get_weather", {})])
+    fake.run_command("and tomorrow?")
+    assert sent[0] == sent[1]
+    assert "geography" not in sent[1][0]
+    # The next conversation picks up what was learned.
+    monkeypatch.setattr(fake, "_last_command_at", brain.time.monotonic() - brain.COMMAND_MEMORY_SECONDS - 1)
+    fake.run_command("hello again")
+    assert "geography" in sent[2][0]
+
+
+def test_claude_5_requests_drop_stale_thinking_instead_of_failing():
+    fake = brain.AnthropicBrain.__new__(brain.AnthropicBrain)
+    extras = fake._extras("claude-sonnet-5-5")
+    assert "thinking-binding-controls-2026-08-01" in extras["betas"]
+    assert extras["thinking"] == {
+        "type": "adaptive", "block_binding": {"prefix_mismatch_behavior": "drop_block"},
+    }
+    # Older models don't take these settings.
+    assert fake._extras("claude-haiku-4-5") == {"betas": ["server-side-fallback-2026-07-01"]}

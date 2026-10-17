@@ -180,6 +180,8 @@ class Brain:
 
     def __init__(self):
         self._command_history: list = []
+        self._conversation_system = ""
+        self._conversation_tools: list = []
         self.last_calls: list = []
         self._last_command_at = 0.0
         self.hud = _QuietHUD()
@@ -238,8 +240,15 @@ class Brain:
     def _start_command(self, command: str) -> list:
         """Returns the command history with the new command added."""
         now = time.monotonic()
-        if now - self._last_command_at > COMMAND_MEMORY_SECONDS:
+        if now - self._last_command_at > COMMAND_MEMORY_SECONDS or not self._command_history:
             self._command_history = []
+            # The instructions and tools stay exactly the same for the whole
+            # conversation: Claude checks that they haven't changed since its
+            # earlier thinking, and rejects the request if they have. New
+            # memories and habits show up in the next conversation (and in
+            # this one through the tool results that saved them).
+            self._conversation_system = self._command_system()
+            self._conversation_tools = self._command_tools()
         self._last_command_at = now
         self._turn_start = len(self._command_history)
         stamp = datetime.now().strftime("%A %d %B %Y, %H:%M")
@@ -303,14 +312,13 @@ class Brain:
 
     def run_command(self, command: str, on_text=None) -> str:
         history = self._start_command(command)
-        tools = self._command_tools()
+        tools = self._conversation_tools
+        system = self._conversation_system
         # What this command did, for learning habits (see habits.py).
         self.last_calls = []
 
         for _ in range(MAX_TOOL_ROUNDS):
-            step = self._step(
-                self._command_system(), history, tools, self.model, "medium", on_text=on_text
-            )
+            step = self._step(system, history, tools, self.model, "medium", on_text=on_text)
             history.append(step.assistant)
             if step.paused:
                 continue
@@ -389,6 +397,12 @@ class AnthropicBrain(Brain):
     # With "default", a request Claude's safety checks decline is retried on
     # another model inside the same call instead of failing outright.
     FALLBACK_BETA = "server-side-fallback-2026-07-01"
+    # Lets a request drop thinking from earlier in the conversation that no
+    # longer matches it, instead of failing with "Invalid signature in
+    # thinking block".
+    BINDING_BETA = "thinking-binding-controls-2026-08-01"
+    # Claude 5 models think adaptively and accept the binding setting.
+    ADAPTIVE_MODELS = re.compile(r"claude-(opus|sonnet|haiku|fable|mythos)-5")
 
     def __init__(self):
         import os
@@ -406,11 +420,19 @@ class AnthropicBrain(Brain):
         self.model = config.model
         self.vision_model = config.vision_model
 
+    def _extras(self, model: str) -> dict:
+        if not self.ADAPTIVE_MODELS.match(model or ""):
+            return {"betas": [self.FALLBACK_BETA]}
+        return {
+            "betas": [self.FALLBACK_BETA, self.BINDING_BETA],
+            "thinking": {"type": "adaptive", "block_binding": {"prefix_mismatch_behavior": "drop_block"}},
+        }
+
     def _create(self, **kwargs):
         return self.client.beta.messages.create(
             max_tokens=16000,
-            betas=[self.FALLBACK_BETA],
             fallbacks="default",
+            **self._extras(kwargs.get("model", "")),
             **kwargs,
         )
 
@@ -505,8 +527,8 @@ class AnthropicBrain(Brain):
     def _stream(self, on_text, **kwargs):
         with self.client.beta.messages.stream(
             max_tokens=16000,
-            betas=[self.FALLBACK_BETA],
             fallbacks="default",
+            **self._extras(kwargs.get("model", "")),
             **kwargs,
         ) as stream:
             for text in stream.text_stream:
