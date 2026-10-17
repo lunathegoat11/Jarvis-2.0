@@ -346,3 +346,67 @@ class SpeechStream:
             samples, sample_rate = chunk
             sd.play(samples, sample_rate)
             sd.wait()  # stop() ends this early
+
+
+# ---- speech as audio files, for playing somewhere else (Jarvis Nano) ----------
+
+
+def _wav_bytes(samples, sample_rate: int) -> bytes:
+    """16-bit mono WAV from float samples in -1..1."""
+    import io
+    import wave
+
+    import numpy as np
+
+    pcm = (np.clip(np.asarray(samples, dtype=np.float32), -1.0, 1.0) * 32767).astype("<i2")
+    buffer = io.BytesIO()
+    with wave.open(buffer, "wb") as out:
+        out.setnchannels(1)
+        out.setsampwidth(2)
+        out.setframerate(int(sample_rate))
+        out.writeframes(pcm.tobytes())
+    return buffer.getvalue()
+
+
+def render_wav(text: str) -> bytes:
+    """Says `text` into a WAV file instead of the speakers, in the same voice
+    Jarvis uses: Kokoro when it's installed, otherwise the computer's own."""
+    import tempfile
+    from pathlib import Path
+
+    text = clean_for_speech(text)
+    if not text:
+        return b""
+    if engine() == "kokoro":
+        try:
+            audio, sample_rate = load_kokoro().create(text, **_kokoro_settings())
+            return _wav_bytes(audio, sample_rate)
+        except Exception as error:
+            print(f"Kokoro voice failed ({error}); using the built-in voice.")
+    with tempfile.TemporaryDirectory() as folder:
+        path = Path(folder) / "speech.wav"
+        if config.is_mac:
+            command = ["say", "-o", str(path), "--data-format=LEI16@22050"]
+            name = prefs.get("voice", config.voice)
+            if name and not KOKORO_NAME.fullmatch(name):
+                command += ["-v", name]
+            speed = float(prefs.get("voice_speed", config.voice_speed))
+            if speed != 1.0:
+                command += ["-r", str(round(175 * speed))]
+            subprocess.run([*command, text], check=True, timeout=60)
+        else:
+            import pyttsx3
+
+            speaker = pyttsx3.init()
+            speaker.save_to_file(text, str(path))
+            speaker.runAndWait()
+        return path.read_bytes()
+
+
+def beep_wav(frequency: float = 880, seconds: float = 0.12, sample_rate: int = 22050) -> bytes:
+    """A short soft beep, e.g. to say "I'm listening"."""
+    import numpy as np
+
+    t = np.arange(int(sample_rate * seconds)) / sample_rate
+    fade = np.minimum(1.0, np.minimum(t, seconds - t) / 0.02)  # no clicks at the ends
+    return _wav_bytes(0.3 * np.sin(2 * np.pi * frequency * t) * fade, sample_rate)

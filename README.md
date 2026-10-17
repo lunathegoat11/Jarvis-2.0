@@ -195,6 +195,29 @@ On a Mac, Jarvis can use your iMessages:
 
 Jarvis needs your number in settings (`JARVIS_MY_NUMBER`), and Full Disk Access to read the messages: System Settings > Privacy & Security > Full Disk Access, turn on Terminal (or Jarvis if you use the app), then quit and reopen it. The first time, macOS also asks to let it use Messages and Contacts.
 
+## Jarvis Nano (the robot)
+
+Jarvis Nano is Jarvis in a small wheeled robot with a claw, LED-ring eyes, a camera, a microphone and a speaker (the Jarvis Mini build: Raspberry Pi Zero 2 W and an Adafruit Crickit HAT). Say "Hey Jarvis" near it and it answers out loud through the robot. It has the same brain as Jarvis: memory, lessons and skills, habits, weather and news, timers, email, texting you, the smart home and Claude's web search. It can drive, turn, use the claw, look through its camera ("what's in front of you?", "pick up the red block") and show feelings with its eyes. The screen, browser, calendar and keyboard tools stay with desktop Jarvis.
+
+The robot is only the body. Its Pi is too small to recognise speech or speak in Jarvis's voice, so Jarvis Nano runs on a computer on the same Wi-Fi (an always-on Mac works well) and talks to the robot's body server over the network. It keeps its own memory, timers and settings in `~/.jarvis-nano`, so it can run beside desktop Jarvis on the same Mac, and takes your AI key and other settings from `~/.jarvis/.env`.
+
+**On the robot**, after the build guide's hardware steps (I2C on, Crickit firmware, speaker installer, mute trace cut), copy the `robot` folder to the Pi and run:
+
+```
+bash ~/Jarvis-2.0/robot/setup.sh
+```
+
+It installs the body server, starts it on every boot, and prints two lines to add to `~/.jarvis-nano/.env` on your computer: the robot's address (`JARVIS_NANO_ROBOT`) and its token (`JARVIS_NANO_TOKEN`).
+
+**On the computer**, install the wake word and start Jarvis Nano:
+
+```
+.venv/bin/pip install -r requirements-nano.txt
+.venv/bin/python -m jarvis.nano
+```
+
+The "Hey Jarvis" detector is openWakeWord's ready-made model, which is licensed for non-commercial use. If it wakes up when it shouldn't, raise `JARVIS_NANO_WAKE_THRESHOLD` (default 0.5); if it misses you, lower it. `JARVIS_NANO_SPEED` (0 to 1) sets how fast it drives, and `JARVIS_NANO_TURN_SECONDS` how long a 90-degree turn takes on your floor. Say "Hey Jarvis" again to interrupt it; it stops talking and moving straight away.
+
 ## Texting and calling you
 
 Jarvis can send you a text or ring your phone when you ask ("text me the address", "call me in five minutes", "text me when it's done"). Put your number in the app's settings (the gear) under **Your phone number**, or set `JARVIS_MY_NUMBER` in `.env`.

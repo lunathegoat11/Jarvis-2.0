@@ -41,6 +41,14 @@ about what is on their screen; a screenshot is attached. Your reply is read \
 aloud, so answer in a few plain spoken sentences with no markdown, lists or \
 code blocks unless they ask for code."""
 
+# Jarvis Nano looking through the robot's camera (see jarvis/nano).
+LOOK_SYSTEM = """\
+You are Jarvis, looking through the camera in the face of a small wheeled \
+robot that sits on the floor or a table. Answer the question about the photo \
+in a few plain sentences. When it matters for moving, say roughly where \
+things are (left, centre, right, how near) and point out anything in the way \
+or any edge the robot could fall off."""
+
 COMMAND_SYSTEM = """\
 You are Jarvis, a voice assistant that controls the user's computer. The user \
 speaks commands; you carry them out with your tools, then say briefly what you \
@@ -288,6 +296,13 @@ class Brain:
             ASK_SYSTEM, self._user(question, screenshot_b64), [], self.vision_model, "medium",
             on_text=on_text,
         )
+        if step.refused:
+            return REFUSAL_REPLY
+        return step.text or EMPTY_REPLY
+
+    def look(self, question: str, image_b64: str) -> str:
+        """Answers a question about a camera photo (Jarvis Nano)."""
+        step = self._step(LOOK_SYSTEM, self._user(question, image_b64), [], self.vision_model, "medium")
         if step.refused:
             return REFUSAL_REPLY
         return step.text or EMPTY_REPLY

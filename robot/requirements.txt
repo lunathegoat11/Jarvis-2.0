@@ -1,0 +1,6 @@
+# On the robot's Raspberry Pi. picamera2 comes from Raspberry Pi OS
+# (sudo apt install python3-picamera2), so make the venv with
+# --system-site-packages to see it.
+fastapi>=0.110
+uvicorn>=0.29
+adafruit-circuitpython-crickit>=2.3

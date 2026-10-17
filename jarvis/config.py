@@ -215,6 +215,15 @@ class Config:
     # remote.py). Whoever knows it can control the Mac, so keep it secret.
     ntfy_reply_topic: str = _first("NTFY_REPLY_TOPIC")
 
+    # Jarvis Nano, the robot (see jarvis/nano and robot/): where its body
+    # server is, its token, how sure the "Hey Jarvis" detector must be (0-1),
+    # its driving speed (0-1), and how many seconds of turning make 90 degrees.
+    nano_robot: str = _first("JARVIS_NANO_ROBOT") or "http://jarvisbot.local:8080"
+    nano_token: str = _first("JARVIS_NANO_TOKEN")
+    nano_wake_threshold: float = _float("JARVIS_NANO_WAKE_THRESHOLD", 0.5)
+    nano_speed: float = _float("JARVIS_NANO_SPEED", 0.6)
+    nano_turn_seconds: float = _float("JARVIS_NANO_TURN_SECONDS", 0.7)
+
     sample_rate: int = 16000
     # Which microphone to use. "auto" prefers the computer's own mic over
     # AirPods and other headsets; "default" follows System Settings; any other
