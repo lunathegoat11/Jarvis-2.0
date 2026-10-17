@@ -1,7 +1,6 @@
 """Texting Jarvis over iMessage, and Jarvis reading and sending messages."""
 
 import sqlite3
-import types
 from datetime import datetime
 
 import pytest

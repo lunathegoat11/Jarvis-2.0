@@ -186,6 +186,15 @@ Jarvis gets better the more you use it, in three ways, all saved on your Mac:
 
 Lessons and skills live in `~/.jarvis/memory.json` with the facts Jarvis remembers about you. "Forget ..." removes any of them.
 
+## iMessage
+
+On a Mac, Jarvis can use your iMessages:
+
+- **Text Jarvis.** From your iPhone (or anything signed into your Apple ID), send yourself a message starting with "Jarvis", like "Jarvis, what's on my calendar tomorrow?". Jarvis runs it on the Mac and texts you the answer in the same conversation, marked 🤖. Only messages in your conversation with your own number count, so nobody else can control your Mac by texting you. Change the word with `JARVIS_IMESSAGE_TRIGGER`, or set `JARVIS_IMESSAGE=0` to turn it off.
+- **Read and send.** "Read my texts from Mom", "what did Alex say?", "text Alex I'm running late". Before sending anything, Jarvis reads back who it's going to and what it says and waits for your yes.
+
+Jarvis needs your number in settings (`JARVIS_MY_NUMBER`), and Full Disk Access to read the messages: System Settings > Privacy & Security > Full Disk Access, turn on Terminal (or Jarvis if you use the app), then quit and reopen it. The first time, macOS also asks to let it use Messages and Contacts.
+
 ## Texting and calling you
 
 Jarvis can send you a text or ring your phone when you ask ("text me the address", "call me in five minutes", "text me when it's done"). Put your number in the app's settings (the gear) under **Your phone number**, or set `JARVIS_MY_NUMBER` in `.env`.
