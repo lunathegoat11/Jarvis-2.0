@@ -15,7 +15,10 @@ def selftest() -> None:
     modules = [
         "jarvis.main", "jarvis.notch", "jarvis.app", "jarvis.voice", "jarvis.audio",
         "jarvis.brain", "jarvis.screen", "jarvis.mail", "jarvis.macapps", "jarvis.setup",
-        "jarvis.devices",
+        "jarvis.devices", "jarvis.contact", "jarvis.remote", "jarvis.imessage", "jarvis.macs",
+        "jarvis.memory", "jarvis.habits", "jarvis.timers", "jarvis.info", "jarvis.browser",
+        "jarvis.computer", "jarvis.quick", "jarvis.router", "jarvis.prefs", "jarvis.hotkeys",
+        "jarvis.holdkeys",
         "faster_whisper", "ctranslate2", "onnxruntime", "kokoro_onnx", "sounddevice",
         "pynput.keyboard", "pynput.mouse", "mss", "PIL", "anthropic", "openai",
         "AppKit", "WebKit", "Quartz", "PyObjCTools.AppHelper",

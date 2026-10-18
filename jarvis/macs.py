@@ -290,7 +290,7 @@ def setup(argv: list[str], clipboard_in=None, clipboard_out=None, out=print) -> 
 
 
 def _paste() -> str:
-    return subprocess.run(["pbpaste"], capture_output=True, text=True).stdout
+    return subprocess.run(["pbpaste"], capture_output=True, text=True, check=False).stdout
 
 
 def _copy(text: str) -> None:

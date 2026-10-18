@@ -98,6 +98,20 @@
   input#my-number { width: 100%; margin-top: 8px; font: inherit; font-size: 13px; color: var(--text);
     background: rgba(255,255,255,.06); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
   input#my-number:focus { outline: 2px solid rgba(255,181,71,.5); outline-offset: 1px; }
+  .field { width: 100%; margin-top: 8px; font: inherit; font-size: 13px; color: var(--text);
+    background: rgba(255,255,255,.06); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+  .field:focus { outline: 2px solid rgba(255,181,71,.5); outline-offset: 1px; }
+  .group h3 { font-size: 11.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+    color: var(--muted); margin: 0; padding: 12px 14px 0; }
+  .code { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+  .code code { flex: 1; min-width: 0; overflow-wrap: anywhere; user-select: text; color: var(--text);
+    font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; background: rgba(255,255,255,.06);
+    border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; }
+  .buttons { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .restart { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; margin: 8px 0; padding: 10px 12px; border-radius: 12px; background: rgba(255,181,71,.14);
+    border: 1px solid rgba(255,181,71,.35); font-size: 12.5px; }
+  .restart[hidden], .buttons[hidden], .mac-only[hidden] { display: none; }
   textarea { width: 100%; margin-top: 8px; resize: vertical; font: inherit; font-size: 13px; color: var(--text);
     background: rgba(255,255,255,.06); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
   textarea:focus, select:focus { outline: 2px solid rgba(255,181,71,.5); outline-offset: 1px; }
@@ -213,6 +227,81 @@
           <input type="tel" id="my-number" autocomplete="off" placeholder="+1 555 123 4567">
         </div>
       </div>
+      <div class="mac-only">
+      <div class="restart" id="restart-bar" hidden>
+        <span>Restart Jarvis to use the new settings.</span>
+        <button class="btn primary" id="restart" style="margin:0;padding:6px 12px">Restart</button>
+      </div>
+      <p class="error" id="app-error" role="alert"></p>
+
+      <div class="group">
+        <h3>Phone alerts</h3>
+        <div class="row" style="display:block">
+          <small>Timers, reminders and "text me" arrive as notifications on your phone through the free ntfy app.</small>
+          <div id="alerts-off" class="buttons"><button class="btn" id="alerts-on">Turn on</button></div>
+          <div id="alerts-steps" hidden>
+            <small>1. Install <b>ntfy</b> from the App Store or Play Store.<br>2. Tap <b>+</b> and enter this name (it works like a password, so don't share it):</small>
+            <div class="code"><code id="alerts-code"></code><button class="btn" data-copy="alerts-code">Copy</button></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="group">
+        <h3>Message Jarvis from your phone</h3>
+        <div class="row" style="display:block">
+          <small>Send Jarvis commands from anywhere with an iPhone Shortcut. Needs phone alerts on, since that's where answers go.</small>
+          <div id="tell-off" class="buttons"><button class="btn" id="tell-on">Turn on</button></div>
+          <div id="tell-steps" hidden>
+            <small>In the Shortcuts app on your iPhone, make a shortcut with three actions: <b>Ask for Input</b>, <b>URL Encode</b>, and <b>Get Contents of URL</b>. In the last one, paste this address and add <b>URL Encoded Text</b> straight after it. Anyone with the address can control this Mac, so keep it private.</small>
+            <div class="code"><code id="tell-code"></code><button class="btn" data-copy="tell-code">Copy</button></div>
+          </div>
+        </div>
+        <div class="row">
+          <div><label for="replies-imessage">Answer by iMessage</label><small>Instead of a notification. Uses your phone number above.</small></div>
+          <label class="switch"><input type="checkbox" id="replies-imessage"><span></span></label>
+        </div>
+        <div class="row">
+          <div><label for="imessage-commands">Commands over iMessage</label><small>Text yourself "Jarvis, ..." to give a command. Needs Full Disk Access for Jarvis.</small></div>
+          <label class="switch"><input type="checkbox" id="imessage-commands"><span></span></label>
+        </div>
+      </div>
+
+      <div class="group">
+        <h3>Your day</h3>
+        <div class="row" style="display:block">
+          <label for="location">Your town</label>
+          <small>For the weather, e.g. Princeton, NJ</small>
+          <input class="field" type="text" id="location" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="row" style="display:block">
+          <label for="briefing">Morning briefing</label>
+          <small>Jarvis reads the weather, news and your day at this time. Leave empty for none.</small>
+          <input class="field" type="time" id="briefing">
+        </div>
+      </div>
+
+      <div class="group">
+        <h3>Other Macs</h3>
+        <div class="row" style="display:block">
+          <small>With Jarvis on two Macs, say "open YouTube on the old Mac". Give each Mac a name, make a code on one, and paste it on the other.</small>
+          <label for="mac-name" style="display:block;margin-top:10px">This Mac's name</label>
+          <input class="field" type="text" id="mac-name" autocomplete="off" spellcheck="false" placeholder="e.g. main">
+          <div class="buttons">
+            <button class="btn" id="macs-make">Make a code</button>
+            <button class="btn" id="macs-paste">Paste code from my other Mac</button>
+          </div>
+          <small id="macs-status" style="margin-top:8px"></small>
+        </div>
+      </div>
+
+      <div class="group">
+        <div class="row">
+          <div><label>AI and key</label><small id="ai-now"></small></div>
+          <button class="btn" id="change-ai">Change</button>
+        </div>
+      </div>
+      </div>
+
       <div class="group" id="phone-setup" hidden>
         <div class="row"><div><label>Control the phone</label><small>Let Jarvis open apps and tap for you</small></div><button class="btn" id="btn-accessibility">Turn on</button></div>
         <div class="row"><div><label>Floating bubble</label><small>A Jarvis button over other apps</small></div><button class="btn" id="btn-overlay">Allow</button></div>
@@ -282,6 +371,20 @@
           applySettings(evt);
           if (evt.info.setup !== undefined) showSetup(evt.info.setup);
           break;
+        case "app_settings":
+          showApp(evt.values);
+          $("restart-bar").hidden = false;
+          if (evt.saved === "NTFY_MACS_TOPIC" && evt.action === "paste_code") {
+            $("macs-status").textContent = app.JARVIS_MAC_NAME ? "Paired. Restart Jarvis on both Macs."
+              : "Paired. Now give this Mac a name.";
+          } else if (evt.saved === "NTFY_MACS_TOPIC") {
+            post({ type: "copy", text: evt.values.NTFY_MACS_TOPIC });
+            $("macs-status").textContent = app.JARVIS_MAC_NAME
+              ? "Paired, and the code is copied. Paste it on your other Mac, then restart both."
+              : "Code ready and copied. Now give this Mac a name.";
+          }
+          break;
+        case "app_settings_error": $("app-error").textContent = evt.text; showApp(app); $("drawer").querySelector(".body").scrollTop = 0; break;
         case "setup_error": $("setup-error").textContent = evt.text; $("setup-save").disabled = false; break;
         case "setup_done": $("setup-save").textContent = "Starting Jarvis…"; break;
         case "state":
@@ -350,6 +453,10 @@
     $("vocabulary").value = s.vocabulary || "";
     if ($("my-number")) $("my-number").value = s.my_number || "";
     if (evt.info.engine === "android") $("phone-setup").hidden = false;
+    document.querySelector(".mac-only").hidden = !evt.app_settings;
+    if (evt.ntfy_server) ntfyServer = evt.ntfy_server;
+    if (evt.app_settings) showApp(evt.app_settings);
+    $("ai-now").textContent = evt.info.provider ? `${evt.info.provider} · ${evt.info.model}` : "";
     $("info").innerHTML =
       `AI: <code>${evt.info.provider}</code> · <code>${evt.info.model}</code><br>` +
       `Screen: <code>${evt.info.vision_model}</code><br>` +
@@ -366,6 +473,45 @@
   $("test-voice").addEventListener("click", () => post({ type: "test_voice" }));
   $("btn-accessibility") && $("btn-accessibility").addEventListener("click", () => post({ type: "open_accessibility" }));
   $("btn-overlay") && $("btn-overlay").addEventListener("click", () => post({ type: "open_overlay" }));
+  // ---- settings that apply after a restart (Mac) -----------------------------
+  let app = {}, ntfyServer = "https://ntfy.sh";
+  function showApp(values) {
+    app = values;
+    $("alerts-off").hidden = !!app.NTFY_TOPIC;
+    $("alerts-steps").hidden = !app.NTFY_TOPIC;
+    $("alerts-code").textContent = app.NTFY_TOPIC || "";
+    $("tell-off").hidden = !!app.NTFY_REPLY_TOPIC;
+    $("tell-steps").hidden = !app.NTFY_REPLY_TOPIC;
+    $("tell-code").textContent = app.NTFY_REPLY_TOPIC ? `${ntfyServer}/${app.NTFY_REPLY_TOPIC}/publish?message=` : "";
+    $("replies-imessage").checked = app.JARVIS_PHONE_REPLIES === "imessage";
+    $("imessage-commands").checked = app.JARVIS_IMESSAGE !== "0";
+    $("location").value = app.JARVIS_LOCATION || "";
+    $("briefing").value = app.JARVIS_BRIEFING_TIME || "";
+    $("mac-name").value = app.JARVIS_MAC_NAME || "";
+    $("macs-status").textContent = !app.NTFY_MACS_TOPIC ? "Not paired yet."
+      : !app.JARVIS_MAC_NAME ? "Paired. Now give this Mac a name."
+      : `Paired. This Mac is "${app.JARVIS_MAC_NAME}".`;
+  }
+  const appSet = (key, value) => { $("app-error").textContent = ""; post({ type: "app_set", key, value }); };
+  $("alerts-on").addEventListener("click", () => post({ type: "new_code", key: "NTFY_TOPIC" }));
+  $("tell-on").addEventListener("click", () => post({ type: "new_code", key: "NTFY_REPLY_TOPIC" }));
+  $("replies-imessage").addEventListener("change", (e) => appSet("JARVIS_PHONE_REPLIES", e.target.checked ? "imessage" : ""));
+  $("imessage-commands").addEventListener("change", (e) => appSet("JARVIS_IMESSAGE", e.target.checked ? "1" : "0"));
+  $("location").addEventListener("change", (e) => appSet("JARVIS_LOCATION", e.target.value.trim()));
+  $("briefing").addEventListener("change", (e) => appSet("JARVIS_BRIEFING_TIME", e.target.value));
+  $("mac-name").addEventListener("change", (e) => appSet("JARVIS_MAC_NAME", e.target.value.trim()));
+  $("macs-make").addEventListener("click", () => {
+    if (app.NTFY_MACS_TOPIC) { post({ type: "copy", text: app.NTFY_MACS_TOPIC }); $("macs-status").textContent = "Code copied. Paste it on your other Mac."; }
+    else post({ type: "new_code", key: "NTFY_MACS_TOPIC" });
+  });
+  $("macs-paste").addEventListener("click", () => post({ type: "paste_code", key: "NTFY_MACS_TOPIC" }));
+  document.querySelectorAll("[data-copy]").forEach((b) => b.addEventListener("click", () => {
+    post({ type: "copy", text: $(b.dataset.copy).textContent });
+    b.textContent = "Copied"; setTimeout(() => (b.textContent = "Copy"), 1500);
+  }));
+  $("restart").addEventListener("click", () => { $("restart").disabled = true; post({ type: "restart" }); });
+  $("change-ai").addEventListener("click", () => { $("drawer").classList.remove("open"); showSetup("Choose the AI that powers Jarvis. Saving restarts Jarvis."); });
+
   $("open-settings").addEventListener("click", () => $("drawer").classList.add("open"));
   $("close-settings").addEventListener("click", () => $("drawer").classList.remove("open"));
   $("clear").addEventListener("click", () => { feed.innerHTML = ""; document.body.classList.remove("active"); });

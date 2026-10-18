@@ -225,6 +225,8 @@ class JarvisApp:
     # ---- messages from the page ----------------------------------------------
 
     def handle(self, message: dict) -> None:
+        from . import setup
+
         kind = message.get("type")
         if kind == "ready":
             self.ready = True
@@ -234,14 +236,14 @@ class JarvisApp:
                     "settings": prefs.all_values(),
                     "voices": voice.available_voices(),
                     "info": {**self.info, "engine": voice.engine()},
+                    "app_settings": setup.app_settings(),
+                    "ntfy_server": config.ntfy_server.rstrip("/"),
                 }
             )
             for event in self.pending:
                 self.send(event)
             self.pending.clear()
         elif kind == "setup":
-            from . import setup
-
             try:
                 setup.write_settings(
                     message.get("provider", ""), message.get("key", ""), message.get("model", "")
@@ -250,6 +252,25 @@ class JarvisApp:
                 self.send({"type": "setup_error", "text": str(error)})
                 return
             self.send({"type": "setup_done"})
+            setup.relaunch()
+        elif kind in ("app_set", "new_code", "paste_code"):
+            key = message.get("key", "")
+            try:
+                if kind == "app_set":
+                    values = setup.set_app_setting(key, message.get("value", ""))
+                elif kind == "new_code":
+                    values = setup.new_code(key)
+                else:
+                    values = setup.set_app_setting(key, _paste())
+            except ValueError as error:
+                self.send({"type": "app_settings_error", "key": key, "text": str(error)})
+                return
+            self.send({"type": "app_settings", "values": values, "saved": key, "action": kind})
+        elif kind == "copy":
+            # Copied here rather than in the page: WebKit only lets a page
+            # use the clipboard over https.
+            _copy(str(message.get("text", "")))
+        elif kind == "restart":
             setup.relaunch()
         elif kind == "set":
             prefs.set(message["key"], message["value"])
@@ -261,6 +282,18 @@ class JarvisApp:
                 args=("Good evening. All systems are online, and I'm ready when you are.",),
                 daemon=True,
             ).start()
+
+
+def _copy(text: str) -> None:
+    import subprocess
+
+    subprocess.run(["pbcopy"], input=text, text=True, check=False)
+
+
+def _paste() -> str:
+    import subprocess
+
+    return subprocess.run(["pbpaste"], capture_output=True, text=True, check=False).stdout
 
 
 def available() -> bool:

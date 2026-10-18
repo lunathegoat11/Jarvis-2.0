@@ -2,6 +2,7 @@
 key, and Jarvis saves it to ~/.jarvis/.env and restarts itself.
 """
 
+import re
 import shlex
 import subprocess
 from pathlib import Path
@@ -79,3 +80,77 @@ def run_setup_window(problem: str) -> None:
     window = JarvisApp({"provider": "", "model": "", "vision_model": "", "setup": problem})
     window.show()
     AppHelper.runEventLoop(installInterrupt=True)
+
+
+# ---- the rest of the settings, from the app's Settings screen -----------------
+#
+# Phone alerts, messages from the phone, iMessage, the weather and briefing,
+# and other Macs: everything that used to mean editing .env in Terminal. They
+# take effect when Jarvis restarts. API keys aren't here; the setup screen
+# handles those.
+
+APP_SETTINGS = {
+    "NTFY_TOPIC": lambda: settings.config.ntfy_topic,
+    "NTFY_REPLY_TOPIC": lambda: settings.config.ntfy_reply_topic,
+    "JARVIS_PHONE_REPLIES": lambda: settings.config.phone_replies,
+    "JARVIS_IMESSAGE": lambda: "1" if settings.config.imessage_commands else "0",
+    "JARVIS_LOCATION": lambda: settings.config.location,
+    "JARVIS_BRIEFING_TIME": lambda: settings.config.briefing_time,
+    "JARVIS_MAC_NAME": lambda: settings.config.mac_name,
+    "NTFY_MACS_TOPIC": lambda: settings.config.ntfy_macs_topic,
+}
+# Changes saved since Jarvis started, so the screen shows them before a restart.
+_changed: dict[str, str] = {}
+
+
+def app_settings() -> dict:
+    return {key: _changed.get(key, read()) for key, read in APP_SETTINGS.items()}
+
+
+def _check(key: str, value: str) -> str:
+    from . import macs
+
+    value = " ".join(str(value).split())  # one line, so it can't add others to .env
+    if not value:
+        return ""
+    if key == "JARVIS_PHONE_REPLIES" and value not in ("imessage", ""):
+        raise ValueError("Phone replies are either by iMessage or by notification.")
+    if key == "JARVIS_IMESSAGE" and value not in ("0", "1"):
+        raise ValueError("iMessage commands are either on or off.")
+    if key == "JARVIS_BRIEFING_TIME" and not re.fullmatch(r"([01]?\d|2[0-3]):[0-5]\d", value):
+        raise ValueError("Give the briefing time like 07:30.")
+    if key == "JARVIS_MAC_NAME":
+        value = macs.name_of(value)
+        if not value:
+            raise ValueError('Give this Mac a short name, like "main" or "old".')
+    if key in ("NTFY_TOPIC", "NTFY_REPLY_TOPIC", "NTFY_MACS_TOPIC"):
+        if not re.fullmatch(r"[A-Za-z0-9_-]{16,64}", value):
+            raise ValueError("That isn't a valid code. Copy it again.")
+        others = {k: v for k, v in app_settings().items() if k.endswith("TOPIC") and k != key}
+        if value in others.values():
+            raise ValueError("Each of these needs its own code.")
+    return value
+
+
+def set_app_setting(key: str, value: str, path: Path | None = None) -> dict:
+    """Saves one setting from the Settings screen and returns them all."""
+    if key not in APP_SETTINGS:
+        raise ValueError(f"The app can't change {key}.")
+    value = _check(key, value)
+    save_settings({key: value}, path)
+    _changed[key] = value
+    return app_settings()
+
+
+def new_code(key: str, path: Path | None = None) -> dict:
+    """Makes a long random private topic for phone alerts, messages from the
+    phone, or the Macs, keeping one that's already set."""
+    import secrets
+
+    from . import macs
+
+    if app_settings().get(key):
+        return app_settings()
+    prefix = {"NTFY_TOPIC": "jarvis-alerts-", "NTFY_REPLY_TOPIC": "jarvis-tell-",
+              "NTFY_MACS_TOPIC": macs.TOPIC_PREFIX}[key]
+    return set_app_setting(key, prefix + secrets.token_urlsafe(18), path)

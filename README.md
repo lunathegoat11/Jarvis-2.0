@@ -44,6 +44,9 @@ The Mac app is built by GitHub:
 3. The first time, macOS says it can't check the app for malware, because it isn't signed with a paid Apple Developer certificate. Open **System Settings → Privacy & Security**, scroll down, and click **Open Anyway** next to Jarvis.
 4. Jarvis asks which AI to use and for your key, saved only on that Mac in `~/.jarvis/.env`.
 5. Give **Jarvis** (not Terminal) access to the Microphone, Accessibility, Input Monitoring and Screen Recording in Privacy & Security.
+6. Everything else is in the app's **Settings** (the gear): phone alerts, messaging Jarvis from your phone, iMessage, your town for the weather, a morning briefing, pairing with your other Mac, and changing the AI or key. Settings that need it show a **Restart** button.
+
+The app needs a Mac with Apple Silicon (M1 or newer) and macOS 13 or later. Older Intel Macs can still run Jarvis from the source folder.
 
 To share either app, send people the file. The repository is private, so others can't download it from GitHub themselves. The Mac app writes what it's doing to `~/.jarvis/jarvis.log`, which is the place to look if something goes wrong.
 
