@@ -214,6 +214,11 @@ class Config:
     # A second private topic for messages from your phone to Jarvis (see
     # remote.py). Whoever knows it can control the Mac, so keep it secret.
     ntfy_reply_topic: str = _first("NTFY_REPLY_TOPIC")
+    # Jarvis on more than one Mac (see macs.py): this Mac's name, like "main"
+    # or "old", and a private topic all of them share. Whoever knows the topic
+    # can control every one of them, so keep it secret.
+    mac_name: str = _first("JARVIS_MAC_NAME")
+    ntfy_macs_topic: str = _first("NTFY_MACS_TOPIC")
 
     # Jarvis Nano, the robot (see jarvis/nano and robot/): where its body
     # server is, its token, how sure the "Hey Jarvis" detector must be (0-1),

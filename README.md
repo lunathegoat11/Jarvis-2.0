@@ -195,6 +195,26 @@ On a Mac, Jarvis can use your iMessages:
 
 Jarvis needs your number in settings (`JARVIS_MY_NUMBER`), and Full Disk Access to read the messages: System Settings > Privacy & Security > Full Disk Access, turn on Terminal (or Jarvis if you use the app), then quit and reopen it. The first time, macOS also asks to let it use Messages and Contacts.
 
+## More than one Mac
+
+If Jarvis runs on two Macs, either one can do things on the other: "open YouTube on the old Mac", or a text from your phone like "open my essay on the main Mac". If you don't name a Mac, the one you asked does it.
+
+Set it up once. On the first Mac, in the Jarvis folder:
+
+```
+.venv/bin/python -m jarvis.macs main
+```
+
+That names the Mac and copies a secret code to the clipboard. On the second Mac, run this (with whatever name you like instead of `old`):
+
+```
+.venv/bin/python -m jarvis.macs old --paste
+```
+
+If the clipboard doesn't carry over between your Macs, text the code to yourself on iMessage and copy it on the second Mac first. Then restart Jarvis on both. They find each other through ntfy, and anyone who has the code can control both Macs, so keep it secret.
+
+The Mac doing the job sends its answer back to the Mac you asked. If the job takes more than two minutes, the answer comes to your phone instead.
+
 ## Jarvis Nano (the robot)
 
 Jarvis Nano is Jarvis in a small wheeled robot with a claw, LED-ring eyes, a camera, a microphone and a speaker (the Jarvis Mini build: Raspberry Pi Zero 2 W and an Adafruit Crickit HAT). Say "Hey Jarvis" near it and it answers out loud through the robot. It has the same brain as Jarvis: memory, lessons and skills, habits, weather and news, timers, email, texting you, the smart home and Claude's web search. It can drive, turn, use the claw, look through its camera ("what's in front of you?", "pick up the red block") and show feelings with its eyes. The screen, browser, calendar and keyboard tools stay with desktop Jarvis.

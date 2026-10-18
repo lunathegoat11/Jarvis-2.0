@@ -27,13 +27,19 @@ def write_settings(provider: str, key: str = "", model: str = "", path: Path | N
     if provider == "ollama" and not model:
         raise ValueError("Type the model name exactly as `ollama list` shows it.")
 
-    path = path or settings.USER_ENV
-    path.parent.mkdir(parents=True, exist_ok=True)
     updates = {"JARVIS_PROVIDER": provider}
     if key_name:
         updates[key_name] = key
     updates["JARVIS_MODEL"] = model  # empty means the provider's default
 
+    return save_settings(updates, path)
+
+
+def save_settings(updates: dict, path: Path | None = None) -> Path:
+    """Sets these settings in the .env file (an empty value removes one),
+    keeping any other lines already in it."""
+    path = path or settings.USER_ENV
+    path.parent.mkdir(parents=True, exist_ok=True)
     lines = path.read_text().splitlines() if path.exists() else []
     kept = [line for line in lines if line.split("=", 1)[0].strip() not in updates]
     kept += [f"{name}={value}" for name, value in updates.items() if value]

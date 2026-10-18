@@ -26,9 +26,10 @@ def configured() -> bool:
     return bool(topic) and topic != config.ntfy_topic
 
 
-def _url(since: str) -> str:
+def _url(since: str, topic: str | None = None) -> str:
     server = config.ntfy_server.rstrip("/")
-    return f"{server}/{config.ntfy_reply_topic}/json?since={urllib.parse.quote(since)}"
+    topic = topic or config.ntfy_reply_topic
+    return f"{server}/{topic}/json?since={urllib.parse.quote(since)}"
 
 
 def _headers() -> dict:
@@ -37,15 +38,21 @@ def _headers() -> dict:
     return {}
 
 
-def listen(on_message, log=print) -> threading.Thread:
-    """Calls on_message(text) for each message sent to the reply topic, on a
-    background thread, reconnecting whenever the connection drops."""
-    thread = threading.Thread(target=_listen_loop, args=(on_message, log), daemon=True)
+def listen(on_message, log=print, topic: str | None = None, label: str = "Phone messages") -> threading.Thread:
+    """Calls on_message(text) for each message sent to the reply topic (or
+    another topic), on a background thread, reconnecting whenever the
+    connection drops."""
+    thread = threading.Thread(
+        target=_listen_loop, args=(on_message, log), kwargs={"topic": topic, "label": label}, daemon=True
+    )
     thread.start()
     return thread
 
 
-def _listen_loop(on_message, log, stop: threading.Event | None = None, sleep=time.sleep) -> None:
+def _listen_loop(
+    on_message, log, stop: threading.Event | None = None, sleep=time.sleep,
+    topic: str | None = None, label: str = "Phone messages",
+) -> None:
     # Start from now, so messages sent while Jarvis was off (which ntfy keeps
     # for a while) aren't run as stale commands. After that, resume from the
     # last message seen so nothing is missed or run twice across reconnects.
@@ -54,7 +61,7 @@ def _listen_loop(on_message, log, stop: threading.Event | None = None, sleep=tim
     delay = 2
     while not (stop and stop.is_set()):
         try:
-            request = urllib.request.Request(_url(since), headers=_headers())
+            request = urllib.request.Request(_url(since, topic), headers=_headers())
             # ntfy sends a keepalive about every 45 seconds, so a longer
             # silence means the connection is dead.
             with urllib.request.urlopen(request, timeout=120) as stream:
@@ -71,12 +78,12 @@ def _listen_loop(on_message, log, stop: threading.Event | None = None, sleep=tim
                     try:
                         on_message(text)
                     except Exception as error:
-                        log(f"A message from your phone failed: {error}")
+                        log(f"{label}: a message failed: {error}")
                     if stop and stop.is_set():
                         return
         except Exception as error:
             if stop and stop.is_set():
                 return
-            log(f"Phone messages: lost the connection to ntfy ({error}); retrying in {delay}s.")
+            log(f"{label}: lost the connection to ntfy ({error}); retrying in {delay}s.")
             sleep(delay)
             delay = min(delay * 2, 60)

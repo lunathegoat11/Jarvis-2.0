@@ -542,6 +542,20 @@ CONTACT_TOOLS = [
     },
 ]
 
+MAC_TOOLS = [
+    {
+        "name": "other_mac",
+        "description": (
+            "Have Jarvis on another of the user's Macs do something there, like opening an "
+            "app or a website, and get back what it said. Use it only when the user names "
+            "another Mac. mac is its name; task is the request in plain words, as the user "
+            "would say it to that Mac."
+        ),
+        "strict": True,
+        "input_schema": _schema({"mac": {"type": "string"}, "task": {"type": "string"}}, ["mac", "task"]),
+    },
+]
+
 # Claude's web search runs on Anthropic's servers, so only Claude gets it.
 WEB_SEARCH_TOOL = {"type": "web_search_20260209", "name": "web_search", "max_uses": 3}
 
@@ -565,6 +579,10 @@ def command_tools(can_see_screen: bool = True) -> list[dict]:
 
     if devices.home_assistant_configured():
         tools += HOME_ASSISTANT_TOOLS
+    from . import macs
+
+    if macs.configured():
+        tools += MAC_TOOLS
     if can_see_screen:
         tools += [LOOK_AT_SCREEN_TOOL, USE_SCREEN_TOOL]
     return tools
@@ -691,6 +709,10 @@ def run_tool(name: str, args: dict) -> str:
         from . import contact
 
         return contact.call_me(args["reason"])
+    if name == "other_mac":
+        from . import macs
+
+        return macs.ask(args["mac"], args["task"])
     if name == "check_calendar":
         from . import macapps
 

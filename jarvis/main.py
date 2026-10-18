@@ -1,10 +1,11 @@
 """Jarvis entry point: listens for hotkeys and runs the three voice modes."""
 
+import contextlib
 import threading
 import time
 import traceback
 
-from . import contact, desktop, habits, imessage, prefs, quick, remote, router, timers, tools, voice
+from . import contact, desktop, habits, imessage, macs, prefs, quick, remote, router, timers, tools, voice
 from .audio import Recorder, Transcriber
 from .brain import make_brain
 from . import config as settings
@@ -411,7 +412,8 @@ class Jarvis:
     def phone_message(self, text: str, replies=None) -> None:
         """A message from the phone (ntfy, see remote.py, or iMessage, see
         imessage.py): run it like a spoken command and answer the same way."""
-        log(f"From your phone: {text!r}")
+        source = getattr(replies, "from_mac", "")
+        log(f"From the {source} Mac: {text!r}" if source else f"From your phone: {text!r}")
         self.interrupt()
         self._busy = True
         job = self._job
@@ -427,16 +429,25 @@ class Jarvis:
             if quick_command:
                 reply = quick.run(quick_command)
             else:
-                note = (
-                    "[Typed on the user's phone while they're away from the Mac. Your reply "
-                    "goes back to their phone by itself, so keep it to a sentence or two and "
-                    "don't use text_me or call_me to answer. For anything long they ask for, "
-                    "like notes or a study sheet, use write_document; the file is sent to "
-                    "their phone too."
-                )
-                if contact.last_alert:
-                    note += f' Your last alert to their phone said: "{contact.last_alert}"'
-                reply = self.brain.run_command(f"{note}]\n{text}")
+                from_mac = getattr(replies, "from_mac", "")
+                if from_mac:
+                    note = (
+                        f'[Passed on from the user\'s "{from_mac}" Mac, where they asked for it '
+                        "to be done on this Mac. Do it here. Your reply goes back to that Mac by "
+                        "itself, so keep it to a sentence or two."
+                    )
+                else:
+                    note = (
+                        "[Typed on the user's phone while they're away from the Mac. Your reply "
+                        "goes back to their phone by itself, so keep it to a sentence or two and "
+                        "don't use text_me or call_me to answer. For anything long they ask for, "
+                        "like notes or a study sheet, use write_document; the file is sent to "
+                        "their phone too."
+                    )
+                    if contact.last_alert:
+                        note += f' Your last alert to their phone said: "{contact.last_alert}"'
+                with macs.passed_on() if from_mac else contextlib.nullcontext():
+                    reply = self.brain.run_command(f"{note}]\n{text}")
             if not current():
                 return
             log(f"Reply: {reply!r}")
@@ -466,6 +477,13 @@ class Jarvis:
         finally:
             if current():
                 self._busy = False
+
+    def _late_mac_answer(self, text: str) -> None:
+        log(text)
+        try:
+            PhoneReplies().text(text)
+        except Exception as error:
+            log(f"Couldn't send that to your phone: {error}")
 
     def _run_job(self, mode: str, audio, job: int) -> None:
         try:
@@ -504,6 +522,9 @@ class Jarvis:
             print("  messages from your phone are on (ntfy)")
         elif config.ntfy_reply_topic:
             print("  NTFY_REPLY_TOPIC must be different from NTFY_TOPIC; phone messages are off.")
+        if macs.configured():
+            macs.start(self.phone_message, on_late=self._late_mac_answer, log=log)
+            print(f'  other Macs are on; this one is called "{macs.me()}"')
 
         # Hold-to-talk needs the macOS event loop, which the notch panel runs.
         if config.hold_keys and isinstance(self.hud, NotchHUD):

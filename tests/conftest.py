@@ -1,6 +1,6 @@
 import pytest
 
-from jarvis import habits, memory
+from jarvis import habits, macs, memory
 from jarvis.config import Config
 
 
@@ -10,4 +10,5 @@ def private_data(tmp_path, monkeypatch):
     data = tmp_path / "jarvis-data"
     monkeypatch.setattr(habits, "config", Config(data_dir=data))
     monkeypatch.setattr(memory, "config", Config(data_dir=data))
+    monkeypatch.setattr(macs, "config", Config(data_dir=data, mac_name="", ntfy_macs_topic=""))
     return data

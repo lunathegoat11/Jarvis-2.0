@@ -239,9 +239,12 @@ class Brain:
     COMMAND_HINT = ""
 
     def _command_system(self) -> str:
-        from . import habits, memory
+        from . import habits, macs, memory
 
-        return COMMAND_SYSTEM + self.COMMAND_HINT + memory.prompt_section() + habits.prompt_section()
+        return (
+            COMMAND_SYSTEM + self.COMMAND_HINT + memory.prompt_section() + habits.prompt_section()
+            + macs.prompt_section()
+        )
 
     # ---- shared behaviour ---------------------------------------------------
 
